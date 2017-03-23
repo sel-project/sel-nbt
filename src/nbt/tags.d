@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2016-2017
+ * Copyright (c) 2017
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -530,26 +530,14 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
 	}
 
 	public override void encode(Stream stream) {
-		if(this.value.length) {
-			stream.writeByte(this.value[0].id);
-			stream.writeLength(this.value.length);
-			foreach(v ; this.value) {
-				v.encode(stream);
-			}
-		} else {
-			static if(!isAbstractClass!T) {
-				stream.writeByte(new T().id);
-			} else {
-				stream.writeByte(NBT.BYTE);
-			}
-			stream.writeLength(0);
+		stream.writeByte(this.childId);
+		stream.writeLength(this.value.length);
+		foreach(v ; this.value) {
+			v.encode(stream);
 		}
 	}
 
-	public override void decode(Stream stream) {
-		ubyte id = stream.readByte();
-		immutable length = stream.readLength();
-	}
+	public override abstract void decode(Stream stream);
 
 	public override JSONValue toJSON() {
 		JSONValue[] json;
@@ -586,18 +574,40 @@ class List : ListImpl!NamedTag {
 		this("", tags);
 	}
 	
-	public final override @property @safe ubyte childId() {
-		return this.length == 0 ? NBT.BYTE : this.value[0].id; // an empty list is a list of Byte (first named tag)
+	public final override pure nothrow @property @safe @nogc ubyte childId() {
+		return this.length == 0 ? NBT.END : this.value[0].id;
+	}
+
+	public override void decode(Stream stream) {
+		immutable ubyte id = stream.readByte();
+		immutable length = stream.readLength();
+		NamedTag function() ctor = (){
+			switch(id) {
+				foreach(i, T; Tags) {
+					static if(is(T : NamedTag)) {
+						case i: return { return cast(NamedTag)new T(); };
+					}
+				}
+				default: return null;
+			}
+		}();
+		if(ctor !is null) {
+			foreach(i ; 0..length) {
+				NamedTag tag = ctor();
+				tag.decode(stream);
+				this.value ~= tag;
+			}
+		}
 	}
 	
-	public @safe T opCast(T)() if(is(T.TagType : NamedTag)) {
+	/*public @safe T opCast(T)() if(is(T.TagType : NamedTag)) {
 		//TODO they must be validated
 		T.TagType[] array = new T.TagType[this.length];
 		foreach(size_t i, ref T.TagType tag; array) {
 			tag = cast(T.TagType)this[i];
 		}
 		return new T(this.name, array);
-	}
+	}*/
 	
 	public override bool opEquals(Object object) {
 		if(cast(NamedTag)object && cast(IList)object) {
@@ -614,6 +624,12 @@ class List : ListImpl!NamedTag {
 class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
 	
 	alias TagType = T;
+
+	public static immutable ubyte tagId;
+
+	public static this() {
+		tagId = new T().id;
+	}
 	
 	public @safe @nogc this(string name, T[] tags...) {
 		super(name, tags);
@@ -624,8 +640,17 @@ class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
 	}
 	
 	public final override pure nothrow @property @safe @nogc ubyte childId() {
-		//return new T().id; //TODO do this using a static ctor
-		return 0;
+		return tagId;
+	}
+
+	public override void decode(Stream stream) {
+		// shouldn't be called
+		if(stream.readByte() != this.childId) throw new Exception("Decoding the wrong list");
+		foreach(i ; 0..stream.readLength()) {
+			T tag = new T();
+			tag.decode(stream);
+			this.value ~= tag;
+		}
 	}
 	
 	public T opCast(T)() if(is(T == List)) {
@@ -647,6 +672,8 @@ unittest {
 	
 	auto list = new ListOf!Byte([new Byte(1), new Byte(2)]);
 	assert(cast(List)list !is null);
+	assert(list.length == 2);
+	assert(list[0] == 1 && list[1] == 2);
 	
 }
 
@@ -779,7 +806,7 @@ class Compound : NamedTag {
 	 * ---
 	 */
 	public @trusted T get(T:NamedTag)(string index) {
-		NamedTag ret = this.value[index];
+		/*NamedTag ret = this.value[index];
 		if(cast(T)ret) return cast(T)ret;
 		static if(is(T : IList)) {
 			if(cast(IList)ret) {
@@ -794,7 +821,8 @@ class Compound : NamedTag {
 				}
 			}
 		}
-		return null;
+		return null;*/
+		return cast(T)this.value[index];
 	}
 	
 	/**
@@ -929,11 +957,14 @@ class Compound : NamedTag {
 }
 
 unittest {
-	
+
 	Compound compound = new Compound();
-	
-	compound[] = new ListOf!Byte("test");
-	assert(compound.has!List("test"));
-	assert(compound.get!List("test") == compound.get!(ListOf!Byte)("test"));
+
+	compound["0"] = "string";
+	compound[] = new Int("int", 44);
+	assert(cast(String)compound["0"]);
+	assert(cast(Int)compound["int"]);
+	assert(compound.get!String("0") == "string");
+	assert(compound.get!Int("int") == 44);
 	
 }

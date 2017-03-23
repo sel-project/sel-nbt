@@ -8,7 +8,11 @@ import nbt.tags;
 
 class Stream {
 
-	ubyte[] buffer;
+	public ubyte[] buffer;
+	
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
+		this.buffer = buffer;
+	}
 
 	public void writeTag(Tag tag) {
 		this.writeByte(tag.id);
@@ -81,6 +85,10 @@ class Stream {
 }
 
 class EndianStream(Endian endianness) : Stream {
+	
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
+		super(buffer);
+	}
 
 	private mixin template Impl(T) {
 
@@ -103,20 +111,28 @@ class EndianStream(Endian endianness) : Stream {
 	mixin Impl!double;
 
 	public override void writeString(string value) {
-		this.writeShort(value.length & short.max);
+		this.writeStringLength(value.length);
 		this.buffer ~= cast(ubyte[])value;
 	}
 
+	protected void writeStringLength(size_t value) {
+		this.writeShort(value & short.max);
+	}
+
+	public override void writeLength(size_t value) {
+		this.writeInt(value & int.max);
+	}
+	
 	public override string readString() {
-		immutable length = this.readShort();
+		immutable length = this.readStringLength();
 		if(this.buffer.length < length) this.buffer.length = length;
 		auto ret = this.buffer[0..length];
 		this.buffer = this.buffer[length..$];
 		return cast(string)ret;
 	}
 
-	public override void writeLength(size_t value) {
-		this.writeInt(value & int.max);
+	protected size_t readStringLength() {
+		return this.readShort();
 	}
 
 	public override size_t readLength() {
@@ -125,4 +141,34 @@ class EndianStream(Endian endianness) : Stream {
 
 }
 
-class NetworkStream : EndianStream!(Endian.littleEndian) {}
+class NetworkStream(Endian endianness) : EndianStream!(endianness) {
+
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
+		super(buffer);
+	}
+
+	public override void writeInt(int value) {
+		//TODO write signed varint
+	}
+
+	protected override void writeStringLength(size_t value) {
+		this.writeLength(value);
+	}
+	
+	public override void writeLength(size_t value) {
+		//TODO write unsigned varint
+	}
+
+	public override int readInt() {
+		//TODO read signed varint
+	}
+
+	protected override size_t readStringLength() {
+		return this.readLength();
+	}
+
+	public override size_t readLength() {
+		//TODO read unsigned varint
+	}
+
+}

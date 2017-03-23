@@ -6,4 +6,5 @@
 *.dproj
 *.sln
 *.userprefs
-main.d
+src/main.d
+dub.selections.json
