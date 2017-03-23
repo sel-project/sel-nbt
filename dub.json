@@ -1,0 +1,6 @@
+{
+	"name": "nbt-d",
+	"description": "Minecraft's NBT library",
+	"authors": ["Kripth"],
+	"license": "GPL-3.0"
+}

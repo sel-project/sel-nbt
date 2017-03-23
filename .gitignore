@@ -1,0 +1,9 @@
+/.git/
+/.dub/
+*.sln
+*.exe
+*.obj
+*.dproj
+*.sln
+*.userprefs
+main.d
