@@ -22,43 +22,59 @@ JSONValue toJSON(Tag tag) {
 	return tag.toJSON();
 }
 
+///
+unittest {
+	
+	auto compound = new Compound();
+	compound["a"] = 44;
+	assert(toJSON(compound) == JSONValue(["a": 44]));
+	
+	assert(toJSON(new Int(12)) == JSONValue(12));
+	assert(toJSON(new ListOf!Int(new Int(9))) == JSONValue([9]));
+	
+}
+
+/**
+ * Converts a JSONValue into a Tag.
+ */
 Tag toNBT(JSONValue json) {
 	final switch(json.type) {
 		case JSON_TYPE.OBJECT:
-			Compound ret;
+			NamedTag[string] nt;
 			foreach(name, value; json.object) {
-				auto tag = toNBT(value);
-				if(cast(NamedTag)tag) ret[name] = cast(NamedTag)tag;
+				auto tag = cast(NamedTag)toNBT(value);
+				if(tag !is null) nt[name] = tag;
 			}
-			return ret;
+			return new Compound("", nt);
 		case JSON_TYPE.ARRAY:
-			List ret;
+			NamedTag[] nt;
 			foreach(value ; json.array) {
-				auto tag = toNBT(value);
-				if(cast(NamedTag)tag) ret ~= cast(NamedTag)tag;
+				auto tag = cast(NamedTag)toNBT(value);
+				if(tag !is null) nt ~= tag;
 			}
-			return ret;
+			return new List("", nt);
 		case JSON_TYPE.STRING:
-			return new String(json.str);
+			return new String("", json.str);
 		case JSON_TYPE.INTEGER:
-			return new Long(json.integer);
+			return new Long("", json.integer);
 		case JSON_TYPE.UINTEGER:
-			return new Long(json.uinteger & long.max);
+			return new Long("", json.uinteger & long.max);
 		case JSON_TYPE.FLOAT:
-			return new Double(json.floating);
+			return new Double("", json.floating);
 		case JSON_TYPE.TRUE:
-			return new Bool(true);
+			return new Bool("", true);
 		case JSON_TYPE.FALSE:
-			return new Bool(false);
+			return new Bool("", false);
 		case JSON_TYPE.NULL:
 			return new End();
 	}
 }
 
+///
 unittest {
 
-	auto compound = new Compound();
-	compound["a"] = 44;
-	assert(toJSON(compound) == JSONValue(["a": 44]));
+	assert(toNBT(JSONValue(true)) == new Byte(1));
+	assert(toNBT(JSONValue([1, 2, 3])) == new ListOf!Long(1, 2, 3));
+	assert(toNBT(JSONValue(["a": [1]])) == new Compound(new ListOf!Long("a", 1)));
 
 }

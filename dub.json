@@ -1,6 +1,6 @@
 {
 	"name": "nbt-d",
-	"description": "Minecraft's NBT library",
+	"description": "NBT library for Minecraft and Minecraft: Pocket Edition",
 	"authors": ["Kripth"],
 	"license": "GPL-3.0"
 }
