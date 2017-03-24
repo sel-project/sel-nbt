@@ -111,7 +111,7 @@ class Stream {
 
 }
 
-class EndianStream(Endian endianness) : Stream {
+class ClassicStream(Endian endianness) : Stream {
 	
 	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
 		super(buffer);

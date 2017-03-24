@@ -75,6 +75,7 @@ unittest {
 
 	assert(toNBT(JSONValue(true)) == new Byte(1));
 	assert(toNBT(JSONValue([1, 2, 3])) == new ListOf!Long(1, 2, 3));
-	assert(toNBT(JSONValue(["a": [1]])) == new Compound(new Named!(ListOf!Long)("a", 1)));
+	assert(toNBT(JSONValue(["a": [42]])) == new Compound(new Named!(ListOf!Long)("a", 42)));
+	//assert(toNBT(JSONValue(["a": [42]])) == new Compound(new Named!List("a", new Long(42))));
 
 }

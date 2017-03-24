@@ -87,6 +87,10 @@ interface Tag {
 	public JSONValue toJSON();
 
 	public string toString();
+
+	protected @property string typeString();
+
+	protected @property string valueString();
 	
 }
 
@@ -96,7 +100,7 @@ interface NamedTag : Tag {
 
 }
 
-template Named(T:Tag) if(is(T == class) && !isAbstractClass!T && !is(T : NamedTag)) {
+template Named(T:Tag) if(is(T == class) && !is(T : NamedTag)) {
 
 	class Named : T, NamedTag {
 
@@ -113,11 +117,19 @@ template Named(T:Tag) if(is(T == class) && !isAbstractClass!T && !is(T : NamedTa
 
 		public override bool opEquals(Object o) {
 			auto cmp = cast(typeof(this))o;
-			return cmp !is null && this.name == cmp.name && super.opEquals(o);
+			if(cmp !is null) {
+				return this.name == cmp.name && super.opEquals(o);
+			} else {
+				return super.opEquals(o);
+			}
 		}
 
-		public bool opEquals(T)(T o) if(!is(T : Object)) {
+		public bool opEquals(O)(O o) if(!is(O : Object)) {
 			return super.opEquals(o);
+		}
+
+		public override string toString() {
+			return this.typeString ~ "(" ~ JSONValue(this.name).toString() ~ ": " ~ this.valueString ~ ")";
 		}
 
 	}
@@ -130,7 +142,6 @@ template Named(T:Tag) if(is(T == class) && !isAbstractClass!T && !is(T : NamedTa
  * Example:
  * ---
  * assert(new Short(1) == 1);
- * assert(new Int("name", 100) == new Byte(100));
  * assert(new SimpleTag!(char, 12)('c') == 'c');
  * ---
  */
@@ -181,7 +192,15 @@ class SimpleTag(T, NBT_TYPE _type) : Tag {
 	}
 
 	public override string toString() {
-		return capitalize(T.stringof) ~ "(" ~ to!string(this.value) ~ ")";
+		return this.typeString ~ "(" ~ this.valueString ~ ")";
+	}
+	
+	public override @property string typeString() {
+		return capitalize(T.stringof);
+	}
+	
+	public override @property string valueString() {
+		return to!string(this.value);
 	}
 	
 	alias value this;
@@ -292,7 +311,7 @@ unittest {
 	assert(new Long(44).toString() == "Long(44)"); // format may change
 
 	import std.system : Endian;
-	Stream stream = new EndianStream!(Endian.bigEndian)();
+	Stream stream = new ClassicStream!(Endian.bigEndian)();
 
 	new Byte(1).encode(stream);
 	new Short(5).encode(stream);
@@ -329,53 +348,7 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
 		return _type;
 	}
 
-	public override pure nothrow @safe NamedTag rename(string name) {
-		return new Named!(ArrayTag!(T, _type))(name, this.value);
-	}
-	
-	/**
-	 * Gets the value at the given index.
-	 * Returns: the value of type T at the given index
-	 * Throws: RangeError if index is higher or equals than the array's length
-	 * Example:
-	 * ---
-	 * assert(new IntArray([1, 14, 900])[1] == 14);
-	 * ---
-	 */
-	public @safe T opIndex(size_t index) {
-		return this.value[index];
-	}
-	
-	/**
-	 * Sets the value at the given index.
-	 * Throws: RangeError if index is higher or equals than the array's length
-	 * Example:
-	 * ---
-	 * auto array = new IntArray([1, 14, 900]);
-	 * array[1] = 1;
-	 * assert(array == [1, 1, 900]);
-	 * ---
-	 */
-	public @safe void opIndexAssign(T value, size_t index) {
-		this.value[index] = value;
-	}
-	
-	/**
-	 * Checks if the array contains value.
-	 * Returns: true if one the value in the array is equals to value, false otherwise
-	 * ---
-	 * auto array = new ByteArray(1, 2, 3, 4, 5);
-	 * assert(array.contains(1));
-	 * assert(!array.contains(0));
-	 * assert(array.contains(new Byte("test", 3)));
-	 * ---
-	 */
-	public @trusted bool contains(T value) {
-		foreach(T v ; this.value) {
-			if(v == value) return true;
-		}
-		return false;
-	}
+	public override abstract pure nothrow @safe NamedTag rename(string name);
 	
 	/**
 	 * Concatenates T, an array of T or a NBT array of T to the tag.
@@ -428,33 +401,77 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
 	 * Checks whether or not the array's length is equals to 0.
 	 */
 	public final pure nothrow @property @safe @nogc bool empty() {
-		return this.length == 0;
+		return this.value.length == 0;
 	}
 
+	public override abstract pure nothrow @safe void encode(Stream stream);
+
+	public override abstract pure nothrow @safe void decode(Stream stream);
+
+	public override abstract JSONValue toJSON();
+	
+	public override string toString() {
+		return this.typeString ~ "(" ~ this.valueString ~ ")";
+	}
+	
+	public override @property string typeString() {
+		return capitalize(T.stringof) ~ "Array";
+	}
+	
+	public override @property string valueString() {
+		return to!string(this.value);
+	}
+	
+}
+
+/// ditto
+class NumericArrayTag(T, NBT_TYPE _type) : ArrayTag!(T, _type) if(isNumeric!T) {
+
+	public pure nothrow @safe @nogc this(T[] value...) {
+		super(value);
+	}
+	
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!(NumericArrayTag!(T, _type))(name, this.value);
+	}
+	
 	public override pure nothrow @safe void encode(Stream stream) {
 		stream.writeLength(this.value.length);
 		foreach(v ; this.value) {
 			mixin("stream.write" ~ capitalize(T.stringof) ~ "(v);");
 		}
 	}
-
+	
 	public override pure nothrow @safe void decode(Stream stream) {
 		this.value.length = stream.readLength();
 		foreach(ref v ; this.value) {
 			mixin("v = stream.read" ~ capitalize(T.stringof) ~ "();");
 		}
 	}
+	
+	public override bool opEquals(Object o) {
+		auto c = cast(typeof(this))o;
+		return c !is null && this.value == c.value;
+	}
+	
+	public bool opEquals(T[] value) {
+		return this.value == value;
+	}
+	
+	public bool opEquals(T value) {
+		if(this.value.length == 0) return false;
+		foreach(v ; this.value) {
+			if(v != value) return false;
+		}
+		return true;
+	}
 
 	public override JSONValue toJSON() {
 		return JSONValue(this.value);
 	}
 
-	public override string toString() {
-		return capitalize(T.stringof) ~ "Array(" ~ to!string(this.value) ~ ")";
-	}
-	
 	alias value this;
-	
+
 }
 
 /**
@@ -472,11 +489,9 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
  * assert(signed == [0, 1, -1]);
  * ---
  */
-alias ByteArray = ArrayTag!(byte, NBT_TYPE.BYTE_ARRAY);
+alias ByteArray = NumericArrayTag!(byte, NBT_TYPE.BYTE_ARRAY);
 
 /**
- * $(TAGS)
- * 
  * Array of signed integers, introduced in the last version
  * of the NBT format. Used by anvil worlds.
  * 
@@ -487,29 +502,51 @@ alias ByteArray = ArrayTag!(byte, NBT_TYPE.BYTE_ARRAY);
  * assert(cast(uint[])signed == [uint.max]);
  * ---
  */
-alias IntArray = ArrayTag!(int, NBT_TYPE.INT_ARRAY);
+alias IntArray = NumericArrayTag!(int, NBT_TYPE.INT_ARRAY);
+
+unittest {
+
+	assert(new IntArray(1) == new IntArray(1));
+	assert(new IntArray(1, 2, 3) == [1, 2, 3]);
+	assert(new ByteArray([4]).length == 1);
+	assert(new IntArray(0, 1)[1] == 1);
+	assert(new IntArray(1, 1) == 1);
+
+	auto list = new IntArray(0);
+	list[0] = 14;
+	assert(list[0] == 14);
+	list ~= 100;
+	list ~= [1, 2];
+	assert(list == [14, 100, 1, 2]);
+
+	import std.system : Endian;
+	Stream stream = new ClassicStream!(Endian.bigEndian);
+	new ByteArray(1, 2, 3).encode(stream);
+	assert(stream.buffer == [0, 0, 0, 3, 1, 2, 3]);
+
+	stream = new ClassicStream!(Endian.littleEndian)([NBT_TYPE.INT_ARRAY, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0]);
+	auto tag = cast(Named!IntArray)stream.readNamedTag();
+	assert(tag !is null);
+	assert(tag.name == "");
+	assert(tag == [1, 2]);
+
+}
 
 interface IList {
 	
 	public pure nothrow @property @safe @nogc ubyte childType();
 	
 	public @property @safe Tag[] tags();
+
+	public pure nothrow @property @safe @nogc size_t length();
 	
 }
 
-class ListImpl(T:Tag) : Tag, IList {
-
-	public T[] value;
+class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 
 	public pure nothrow @safe @nogc this(T[] value) {
-		this.value = value;
+		super(value);
 	}
-
-	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
-		return NBT_TYPE.LIST;
-	}
-
-	public override abstract pure nothrow @safe NamedTag rename(string name);
 
 	public override abstract pure nothrow @property @safe @nogc ubyte childType();
 
@@ -525,6 +562,10 @@ class ListImpl(T:Tag) : Tag, IList {
 		}
 	}
 
+	public final override pure nothrow @property @safe @nogc size_t length() {
+		return this.value.length;
+	}
+
 	public override pure nothrow @safe void encode(Stream stream) {
 		stream.writeByte(this.childType);
 		stream.writeLength(this.value.length);
@@ -535,6 +576,11 @@ class ListImpl(T:Tag) : Tag, IList {
 
 	public override abstract pure nothrow @safe void decode(Stream stream);
 
+	public override bool opEquals(Object o) {
+		auto l = cast(IList)o;
+		return l !is null && this.tags == l.tags;
+	}
+
 	public override JSONValue toJSON() {
 		JSONValue[] json;
 		foreach(v ; this.value) {
@@ -542,22 +588,13 @@ class ListImpl(T:Tag) : Tag, IList {
 		}
 		return JSONValue(json);
 	}
-
-	public override string toString() {
-		return "List(" ~ to!string(this.value) ~ ")";
+	
+	public override @property string typeString() {
+		return "List";
 	}
 
 }
 
-/**
- * Array of named tags of the same type.
- * Example:
- * ---
- * new ListOf!String();           // String[] -> string[]
- * new ListOf!Compound();         // Compound[] -> NamedTag[string][]
- * new ListOf!(List!Compound)();  // Compound[][] -> NamedTag[string][][]
- * ---
- */
 class List : ListImpl!Tag {
 
 	private static immutable Tag function() pure nothrow @safe[ubyte] constructors;
@@ -612,13 +649,6 @@ class List : ListImpl!Tag {
 		}
 	}
 	
-	public override bool opEquals(Object object) {
-		if(cast(IList)object) {
-			return this.value == (cast(IList)object).tags;
-		}
-		return false;
-	}
-	
 	alias value this;
 	
 }
@@ -630,6 +660,10 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
 	public static this() {
 		tagType = new T().type;
+	}
+
+	public pure nothrow @safe @nogc this() {
+		super([]);
 	}
 	
 	public pure nothrow @safe this(E)(E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
@@ -658,13 +692,6 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 	
 	public T opCast(T)() if(is(T == List)) {
 		return new List(cast(Tag[])this.value);
-	}
-	
-	public override bool opEquals(Object object) {
-		if(cast(IList)object) {
-			return this.tags == (cast(IList)object).tags;
-		}
-		return false;
 	}
 	
 	alias value this;
@@ -745,7 +772,7 @@ class Compound : Tag {
 	 * }
 	 * ---
 	 */
-	public pure nothrow @safe Tag* opBinaryRight(string op : "in")(string name) {
+	public pure nothrow @safe NamedTag* opBinaryRight(string op : "in")(string name) {
 		auto index = this.search(name);
 		return index >= 0 ? &this.value[index] : null;
 	}
@@ -911,19 +938,33 @@ class Compound : Tag {
 	}
 	
 	public override bool opEquals(Object object) {
-		if(cast(Compound)object) {
-			Compound compound = cast(Compound)object;
-			this.opEquals(compound.value);
-		}
-		return false;
+		auto c = cast(Compound)object;
+		return c !is null && this.cmpTags(c.value);
 	}
 	
 	public bool opEquals(NamedTag[] tags) {
-		return this.value == tags;
+		return this.cmpTags(tags);
 	}
 
+	private bool cmpTags(NamedTag[] tags) {
+		if(this.length != tags.length) return false;
+		foreach(i, tag; tags) {
+			auto ptr = tag.name in this;
+			if(ptr is null || *ptr != tag) return false;
+		}
+		return true;
+	}
+	
 	public override string toString() {
-		return "Compound(" ~ to!string(this.value) ~ ")";
+		return this.typeString ~ "(" ~ this.valueString ~ ")";
+	}
+	
+	public override @property string typeString() {
+		return "Compound";
+	}
+	
+	public override @property string valueString() {
+		return to!string(this.value);
 	}
 	
 }
@@ -939,5 +980,6 @@ unittest {
 	assert(compound.get!String("0") == "string");
 	assert(compound.get!Int("int") == 44);
 	assert(compound == new Compound(new Named!Int("int", 44), new Named!String("0", "string")));
+	assert(new Compound(new Named!Int("1", 1), new Named!Int("2", 2)) == new Compound(new Named!Int("2", 2), new Named!Int("1", 1)));
 	
 }
