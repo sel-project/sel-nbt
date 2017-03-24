@@ -16,4 +16,4 @@ module nbt;
 
 public import nbt.json : toJSON, toNBT;
 public import nbt.stream : Stream, EndianStream, NetworkStream;
-public import nbt.tags : Tags, End, Byte, Bool, Short, Int, Long, Float, Double, ByteArray, IntArray, List, ListOf, Compound;
+public import nbt.tags : Tags, Tag, NamedTag, Named, Byte, Bool, Short, Int, Long, Float, Double, ByteArray, IntArray, List, ListOf, Compound;

@@ -1,10 +1,31 @@
 ﻿module nbt.stream;
 
-import std.bitmanip : read, write;
-import std.string : capitalize;
+import std.bitmanip : littleEndianToNative, bigEndianToNative, nativeToLittleEndian, nativeToBigEndian;
+import std.string : capitalize, toUpper;
 import std.system : Endian;
 
 import nbt.tags;
+
+private pure nothrow @safe ubyte[] write(T, Endian endianness)(T value) {
+	mixin("return nativeTo" ~ endianString(endianness)[0..1].toUpper ~ endianString(endianness)[1..$] ~ "!T(value).dup;");
+}
+
+private pure nothrow @safe T read(T, Endian endianness)(ref ubyte[] buffer) {
+	if(buffer.length >= T.sizeof) {
+		ubyte[T.sizeof] b = buffer[0..T.sizeof];
+		buffer = buffer[T.sizeof..$];
+		mixin("return " ~ endianString(endianness) ~ "ToNative!T(b);");
+	} else if(buffer.length) {
+		buffer.length = T.sizeof;
+		return read!(T, endianness)(buffer);
+	} else {
+		return T.init;
+	}
+}
+
+private pure nothrow @safe string endianString(Endian endianness) {
+	return endianness == Endian.littleEndian ? "littleEndian" : "bigEndian";
+}
 
 class Stream {
 
@@ -14,73 +35,79 @@ class Stream {
 		this.buffer = buffer;
 	}
 
-	public void writeTag(Tag tag) {
+	public pure nothrow @safe void writeTag(Tag tag) {
 		this.writeByte(tag.type);
-		auto named = cast(NamedTag)tag;
-		if(named !is null) {
-			this.writeString(named.name);
-			named.encode(this);
-		}
+		tag.encode(this);
 	}
 
-	public abstract void writeByte(byte value);
+	public pure nothrow @safe void writeNamedTag(string name, Tag tag) {
+		this.writeByte(tag.type);
+		this.writeString(name);
+		tag.encode(this);
+	}
 
-	public abstract void writeShort(short value);
+	public pure nothrow @safe void writeNamedTag(NamedTag tag) {
+		this.writeNamedTag(tag.name, tag);
+	}
 
-	public abstract void writeInt(int value);
+	public abstract pure nothrow @safe void writeByte(byte value);
 
-	public abstract void writeLong(long value);
+	public abstract pure nothrow @safe void writeShort(short value);
 
-	public abstract void writeFloat(float value);
+	public abstract pure nothrow @safe void writeInt(int value);
 
-	public abstract void writeDouble(double value);
+	public abstract pure nothrow @safe void writeLong(long value);
 
-	public abstract void writeString(string value);
+	public abstract pure nothrow @safe void writeFloat(float value);
 
-	public abstract void writeLength(size_t value);
+	public abstract pure nothrow @safe void writeDouble(double value);
 
-	public Tag readTag() {
+	public abstract pure nothrow @safe void writeString(string value);
+
+	public abstract pure nothrow @safe void writeLength(size_t value);
+
+	public pure nothrow @safe Tag readTag() {
 		switch(this.readByte()) {
-			case NBT_TYPE.BYTE: return this.readTagImpl!Byte();
-			case NBT_TYPE.SHORT: return this.readTagImpl!Short();
-			case NBT_TYPE.INT: return this.readTagImpl!Int();
-			case NBT_TYPE.LONG: return this.readTagImpl!Long();
-			case NBT_TYPE.FLOAT: return this.readTagImpl!Float();
-			case NBT_TYPE.DOUBLE: return this.readTagImpl!Double();
-			case NBT_TYPE.BYTE_ARRAY: return this.readTagImpl!ByteArray();
-			case NBT_TYPE.STRING: return this.readTagImpl!String();
-			case NBT_TYPE.LIST: return this.readTagImpl!List();
-			case NBT_TYPE.COMPOUND: return this.readTagImpl!Compound();
-			case NBT_TYPE.INT_ARRAY: return this.readTagImpl!IntArray();
-			default: return new End();
+			foreach(i, T; Tags) {
+				static if(is(T : Tag)) {
+					case i: return this.decodeTagImpl(new T());
+				}
+			}
+			default: return null;
 		}
 	}
 
-	public T readTagImpl(T:NamedTag, bool readName=true)() {
-		static if(readName) {
-			T ret = new T(this.readString());
-		} else {
-			T ret = new T();
+	public pure nothrow @safe NamedTag readNamedTag() {
+		switch(this.readByte()) {
+			foreach(i, T; Tags) {
+				static if(is(T : Tag)) {
+					case i: return this.decodeTagImpl(new Named!T(this.readString()));
+				}
+			}
+			default: return null;
 		}
-		ret.decode(this);
-		return ret;
 	}
 
-	public abstract byte readByte();
+	public pure nothrow @safe T decodeTagImpl(T:Tag)(T tag) {
+		tag.decode(this);
+		return tag;
+	}
 
-	public abstract short readShort();
+	public abstract pure nothrow @safe byte readByte();
 
-	public abstract int readInt();
+	public abstract pure nothrow @safe short readShort();
 
-	public abstract long readLong();
+	public abstract pure nothrow @safe int readInt();
 
-	public abstract float readFloat();
+	public abstract pure nothrow @safe long readLong();
 
-	public abstract double readDouble();
+	public abstract pure nothrow @safe float readFloat();
 
-	public abstract string readString();
+	public abstract pure nothrow @safe double readDouble();
 
-	public abstract size_t readLength();
+	public abstract pure nothrow @safe string readString();
+
+	public abstract pure nothrow @safe size_t readLength();
 
 }
 
@@ -92,9 +119,9 @@ class EndianStream(Endian endianness) : Stream {
 
 	private mixin template Impl(T) {
 
-		mixin("public override void write" ~ capitalize(T.stringof) ~ "(T value){ this.buffer.length += T.sizeof; write!(T, endianness)(this.buffer, value, this.buffer.length - T.sizeof); }");
+		mixin("public override pure nothrow @safe void write" ~ capitalize(T.stringof) ~ "(T value){ this.buffer ~= write!(T, endianness)(value); }");
 
-		mixin("public override T read" ~ capitalize(T.stringof) ~ "(){ if(this.buffer.length < T.sizeof){ this.buffer.length=T.sizeof; } return read!(T, endianness)(this.buffer); }");
+		mixin("public override pure nothrow @safe T read" ~ capitalize(T.stringof) ~ "(){ return read!(T, endianness)(this.buffer); }");
 
 	}
 
@@ -110,20 +137,20 @@ class EndianStream(Endian endianness) : Stream {
 
 	mixin Impl!double;
 
-	public override void writeString(string value) {
+	public override pure nothrow @trusted void writeString(string value) {
 		this.writeStringLength(value.length);
 		this.buffer ~= cast(ubyte[])value;
 	}
 
-	protected void writeStringLength(size_t value) {
+	protected pure nothrow @safe void writeStringLength(size_t value) {
 		this.writeShort(value & short.max);
 	}
 
-	public override void writeLength(size_t value) {
+	public override pure nothrow @safe void writeLength(size_t value) {
 		this.writeInt(value & int.max);
 	}
 	
-	public override string readString() {
+	public override pure nothrow @trusted string readString() {
 		immutable length = this.readStringLength();
 		if(this.buffer.length < length) this.buffer.length = length;
 		auto ret = this.buffer[0..length];
@@ -131,11 +158,11 @@ class EndianStream(Endian endianness) : Stream {
 		return cast(string)ret;
 	}
 
-	protected size_t readStringLength() {
+	protected pure nothrow @safe size_t readStringLength() {
 		return this.readShort();
 	}
 
-	public override size_t readLength() {
+	public override pure nothrow @safe size_t readLength() {
 		return this.readInt();
 	}
 
@@ -147,27 +174,27 @@ class NetworkStream(Endian endianness) : EndianStream!(endianness) {
 		super(buffer);
 	}
 
-	public override void writeInt(int value) {
+	public override pure nothrow @safe void writeInt(int value) {
 		//TODO write signed varint
 	}
 
-	protected override void writeStringLength(size_t value) {
+	protected override pure nothrow @safe void writeStringLength(size_t value) {
 		this.writeLength(value);
 	}
 	
-	public override void writeLength(size_t value) {
+	public override pure nothrow @safe void writeLength(size_t value) {
 		//TODO write unsigned varint
 	}
 
-	public override int readInt() {
+	public override pure nothrow @safe int readInt() {
 		//TODO read signed varint
 	}
 
-	protected override size_t readStringLength() {
+	protected override pure nothrow @safe size_t readStringLength() {
 		return this.readLength();
 	}
 
-	public override size_t readLength() {
+	public override pure nothrow @safe size_t readLength() {
 		//TODO read unsigned varint
 	}
 

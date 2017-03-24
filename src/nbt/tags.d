@@ -12,44 +12,16 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-/**
- * The Named Binary Tag format is used by Minecraft for the various files in which it saves data. 
- * The format is described by Notch in a very brief <a href="http://web.archive.org/web/20110723210920/http://www.minecraft.net/docs/NBT.txt">specification</a>.
- * The format is designed to store data in a tree structure made up of various tags. All tags have
- * an ID and a name. The original known version was 19132 as introduced in Minecraft Beta 1.3,
- * and since then has been updated to 19133 with Anvil, with the addition of the Int Array tag.
- * The NBT format dates all the way back to Minecraft Indev with tags 0 to 10 in use.<br>
- * From <a href="http://minecraft.gamepedia.com/NBT_format">Minecraft Wiki</a>
- * 
- * NBT tags descripted in this page:<br>
- * <a href="#End">End</a><br>
- * <a href="#Byte">Byte</a> (<a href="#Bool">Bool</a>)<br>
- * <a href="#Short">Short</a><br>
- * <a href="#Int">Int</a><br>
- * <a href="#Long">Long</a><br>
- * <a href="#Float">Float</a><br>
- * <a href="#Double">Double</a><br>
- * <a href="#ByteArray">Byte Array</a><br>
- * <a href="#String">String</a><br>
- * <a href="#List">List</a><br>
- * <a href="#Compound">Compound</a><br>
- * <a href="#IntArray">Int Array</a>
- * 
- * Macros:
- * 		TAGS = <b>Tags:</b> <a href="#End">End</a>, <a href="#Byte">Byte</a> (<a href="#Bool">Bool</a>), <a href="#Short">Short</a>, 
- * 					<a href="#Int">Int</a>, <a href="#Long">Long</a>, <a href="#Float">Float</a>, <a href="#Double">Double</a>, 
- * 					<a href="#ByteArray">Byte Array</a>, <a href="#String">String</a>, <a href="#List">List</a>, 
- * 					<a href="#Compound">Compound</a>, <a href="#IntArray">Int Array</a>
- */
 module nbt.tags;
 
+import std.algorithm : canFind;
 import std.conv : to;
 import std.json : JSONValue;
-import std.string : indexOf, capitalize;
+import std.string : capitalize;
 import std.traits : isAbstractClass, isNumeric;
 import std.typetuple : TypeTuple;
 
-import nbt.stream : Stream;
+import nbt.stream;
 
 /**
  * NBT's ids, as unsigned bytes, used by for client-server
@@ -72,7 +44,7 @@ enum NBT_TYPE : ubyte {
 	
 }
 
-alias Tags = TypeTuple!(End, Byte, Short, Int, Long, Float, Double, ByteArray, String, List, Compound, IntArray);
+alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, String, List, Compound, IntArray);
 
 /**
  * Base class for every NBT that contains id and encoding
@@ -80,70 +52,76 @@ alias Tags = TypeTuple!(End, Byte, Short, Int, Long, Float, Double, ByteArray, S
  * to another and the purpose of the tags in the game).
  */
 interface Tag {
-	
-	public abstract pure nothrow @property @safe @nogc ubyte type();
+
+	/**
+	 * Gets the tag's type.
+	 */
+	public pure nothrow @property @safe @nogc NBT_TYPE type();
+
+	/**
+	 * Creates a NamedTag maintaing the tag's properties.
+	 * Example:
+	 * ---
+	 * auto t = new Float(22);
+	 * auto named = t.rename("float");
+	 * assert(cast(NamedTag)named);
+	 * assert(named.name == "float");
+	 * assert(named == 22);
+	 * ---
+	 */
+	public pure nothrow @safe NamedTag rename(string name);
+
+	/**
+	 * Encodes the tag's body.
+	 */
+	public pure nothrow @safe void encode(Stream stream);
+
+	/**
+	 * Decodes the tag's body.
+	 */
+	public pure nothrow @safe void decode(Stream stream);
 	
 	/**
 	 * Encodes the tag's value as json.
 	 */
-	public abstract JSONValue toJSON();
+	public JSONValue toJSON();
+
+	public string toString();
 	
 }
 
-/**
- * $(TAGS)
- * 
- * Tag that marks the end of a Compound tag.
- * Its length is always 1 (its id as a btye) and it's the
- * only tag not named and without a value.
- */
-final class End : Tag {
-	
-	public override pure nothrow @property @safe @nogc ubyte type() {
-		return NBT_TYPE.END;
-	}
+interface NamedTag : Tag {
 
-	public override JSONValue toJSON() {
-		return JSONValue();
-	}
-	
-	public override string toString() {
-		return "End";
-	}
-	
+	public pure nothrow @property @safe @nogc string name();
+
 }
 
-/**
- * An NBT with a name, usually every tag with a value
- * is a named tag.
- */
-abstract class NamedTag : Tag {
-	
-	protected string n_name;
-	
-	public pure nothrow @safe @nogc this(string name) {
-		this.n_name = name;
+template Named(T:Tag) if(is(T == class) && !isAbstractClass!T && !is(T : NamedTag)) {
+
+	class Named : T, NamedTag {
+
+		private string n_name;
+
+		public this(E...)(string name, E args) {
+			super(args);
+			this.n_name = name;
+		}
+
+		public final override pure nothrow @property @safe @nogc string name() {
+			return this.n_name;
+		}
+
+		public override bool opEquals(Object o) {
+			auto cmp = cast(typeof(this))o;
+			return cmp !is null && this.name == cmp.name && super.opEquals(o);
+		}
+
+		public bool opEquals(T)(T o) if(!is(T : Object)) {
+			return super.opEquals(o);
+		}
+
 	}
 
-	public override abstract pure nothrow @property @safe @nogc ubyte type();
-	
-	/**
-	 * Gets the name of the tag.
-	 */
-	public final pure nothrow @property @safe @nogc string name() {
-		return n_name;
-	}
-
-	public abstract void encode(Stream stream);
-
-	public abstract void decode(Stream stream);
-
-	public override abstract JSONValue toJSON();
-
-	protected string format(string tag, string value) {
-		return tag ~ "(" ~ (this.name.length ? "\"" ~ this.name ~ "\": " : "") ~ value ~ ")";
-	}
-	
 }
 
 /**
@@ -156,41 +134,46 @@ abstract class NamedTag : Tag {
  * assert(new SimpleTag!(char, 12)('c') == 'c');
  * ---
  */
-class SimpleTag(T, ubyte _type) : NamedTag {
+class SimpleTag(T, NBT_TYPE _type) : Tag {
 	
 	public T value;
 
-	public pure nothrow @safe @nogc this(string name, T value=T.init) {
-		super(name);
+	public pure nothrow @safe @nogc this(T value=T.init) {
 		this.value = value;
 	}
-	
-	public pure nothrow @safe @nogc this(T value=T.init) {
-		this("", value);
-	}
 
-	public final override pure nothrow @property @safe @nogc ubyte type() {
+	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
 		return _type;
 	}
 
-	public override void encode(Stream stream) {
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!(SimpleTag!(T, _type))(name, this.value);
+	}
+
+	public override pure nothrow @safe void encode(Stream stream) {
 		mixin("stream.write" ~ capitalize(T.stringof) ~ "(this.value);");
 	}
 
-	public override void decode(Stream stream) {
+	public override pure nothrow @safe void decode(Stream stream) {
 		mixin("this.value = stream.read" ~ capitalize(T.stringof) ~ "();");
 	}
 	
-	public override bool opEquals(Object object) {
-		if(cast(typeof(this))object) {
-			auto cmp = cast(typeof(this))object;
-			return this.value == cmp.value && this.name == cmp.name;
-		}
-		return false;
+	public override bool opEquals(Object o) {
+		auto c = cast(typeof(this))o;
+		return c !is null && this.opEquals(c.value);
 	}
 	
 	public bool opEquals(T value) {
 		return this.value == value;
+	}
+
+	public override int opCmp(Object o) {
+		auto c = cast(typeof(this))o;
+		return c !is null && this.opCmp(c.value);
+	}
+
+	public int opCmp(T value) {
+		return this.value == value ? 0 : (this.value < value ? -1 : 1);
 	}
 
 	public override JSONValue toJSON() {
@@ -198,7 +181,7 @@ class SimpleTag(T, ubyte _type) : NamedTag {
 	}
 
 	public override string toString() {
-		return this.format(capitalize(T.stringof), to!string(this.value));
+		return capitalize(T.stringof) ~ "(" ~ to!string(this.value) ~ ")";
 	}
 	
 	alias value this;
@@ -206,8 +189,6 @@ class SimpleTag(T, ubyte _type) : NamedTag {
 }
 
 /**
- * $(TAGS)
- * 
  * Tag with a signed byte, usually used to store small
  * values like the progress of an action or the type of
  * an entity.
@@ -223,8 +204,6 @@ class SimpleTag(T, ubyte _type) : NamedTag {
 alias Byte = SimpleTag!(byte, NBT_TYPE.BYTE);
 
 /**
- * $(TAGS)
- * 
  * Byte tag that only uses the values 1 and 0 to indicate
  * respectively true and false.
  * It's usually used by SEL to store boolean values instead
@@ -237,8 +216,6 @@ alias Byte = SimpleTag!(byte, NBT_TYPE.BYTE);
 alias Bool = Byte;
 
 /**
- * $(TAGS)
- * 
  * Tag with a signed short, used when the 255 bytes (or 127
  * if only the positive part is counted) is not enough.
  * This tag can also be converted to its unsigned version
@@ -247,8 +224,6 @@ alias Bool = Byte;
 alias Short = SimpleTag!(short, NBT_TYPE.SHORT);
 
 /**
- * $(TAGS)
- * 
  * Tag with a signed integer, used to store values that
  * don't usually fit in the short tag, like entity's ids.
  * This tag can aslo be converted to its unsigned version
@@ -259,15 +234,11 @@ alias Short = SimpleTag!(short, NBT_TYPE.SHORT);
 alias Int = SimpleTag!(int, NBT_TYPE.INT);
 
 /**
- * $(TAGS)
- * 
  * Tag with a signed long.
  */
 alias Long = SimpleTag!(long, NBT_TYPE.LONG);
 
 /**
- * $(TAGS)
- * 
  * Tag with a 4-bytes floating point value, usually used to
  * store non-blocks coordinates or points in the world.
  * The float.nan value can be used and recognized by the
@@ -280,8 +251,6 @@ alias Long = SimpleTag!(long, NBT_TYPE.LONG);
 alias Float = SimpleTag!(float, NBT_TYPE.FLOAT);
 
 /**
- * $(TAGS)
- * 
  * Tag with an 8-bytes float point value used instead of the
  * Float tag if the precision or the available number's range
  * must be higher.
@@ -291,8 +260,6 @@ alias Float = SimpleTag!(float, NBT_TYPE.FLOAT);
 alias Double = SimpleTag!(double, NBT_TYPE.DOUBLE);
 
 /**
- * $(TAGS)
- * 
  * Tag with an UTF-8 string encoded as its length as short and
  * its content casted to btyes.
  * Example:
@@ -306,14 +273,35 @@ alias String = SimpleTag!(string, NBT_TYPE.STRING);
 unittest {
 	
 	assert(new Byte(1) == new Bool(true));
-	assert(new Int("test", 12) == new Int("test", 12));
-	assert(new Long("test", 44) == 44);
-	assert(new Double("test", 0) != new Double("test!", 0));
-	assert(new Float("test", 0) != 1);
+	assert(new Named!Int("test", 12) == new Named!Int("test", 12));
+	assert(new Named!Long("test", 44) == 44);
+	assert(new Named!Double("test", 0) != new Named!Double("test!", 0));
+	assert(new Named!Float("test", 0) != 1);
 	assert(12f == new Float(12f));
 
-	// encoding
+	auto t = new Int(22);
+	t += 44;
+	assert(t == 66);
+	assert(t > 22);
+	t /= 2;
+	assert(t == 33);
+	assert(t <= 33);
+	t = 100;
+	assert(t == 100);
 
+	assert(new Long(44).toString() == "Long(44)"); // format may change
+
+	import std.system : Endian;
+	Stream stream = new EndianStream!(Endian.bigEndian)();
+
+	new Byte(1).encode(stream);
+	new Short(5).encode(stream);
+	new Bool(false).encode(stream);
+	assert(stream.buffer == [1, 0, 5, 0]);
+
+	auto i = new Int();
+	i.decode(stream);
+	assert(i == 16778496);
 	
 }
 
@@ -329,21 +317,20 @@ unittest {
  * assert(b.length == 1 && b[0] == 14);
  * ---
  */
-class ArrayTag(T, ubyte _type) : NamedTag {
+class ArrayTag(T, NBT_TYPE _type) : Tag {
 
 	public T[] value;
 
-	public @safe @nogc this(string name, T[] value...) {
-		super(name);
+	public pure nothrow @safe @nogc this(T[] value...) {
 		this.value = value;
 	}
-	
-	public @safe this(T[] value...) {
-		this("", value);
+
+	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
+		return _type;
 	}
 
-	public override pure nothrow @property @safe @nogc ubyte type() {
-		return _type;
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!(ArrayTag!(T, _type))(name, this.value);
 	}
 	
 	/**
@@ -406,7 +393,7 @@ class ArrayTag(T, ubyte _type) : NamedTag {
 	 * assert(array == [1, 1, 1, 2, 3, 100, 99]);
 	 * ---
 	 */
-	public @safe void opOpAssign(string op, G)(G value) if(op == "~" && (is(G == T) || is(G == T[]))) {
+	public @safe void opOpAssign(string op : "~", G)(G value) if(is(G == T) || is(G == T[])) {
 		this.value ~= value;
 	}
 	
@@ -419,7 +406,7 @@ class ArrayTag(T, ubyte _type) : NamedTag {
 	 * assert(array ~ [2, 1] == [1, 2, 3, 2, 1] && array == [1, 2, 3]);
 	 * ---
 	 */
-	public @safe typeof(this) opBinary(string op, G)(G value) if(op == "~" && (is(G == T) || is(G == T[]))) {
+	public @safe typeof(this) opBinary(string op : "~", G)(G value) if(is(G == T) || is(G == T[])) {
 		return new typeof(this)(this.name, this.value ~ value);
 	}
 	
@@ -444,14 +431,14 @@ class ArrayTag(T, ubyte _type) : NamedTag {
 		return this.length == 0;
 	}
 
-	public override void encode(Stream stream) {
+	public override pure nothrow @safe void encode(Stream stream) {
 		stream.writeLength(this.value.length);
 		foreach(v ; this.value) {
 			mixin("stream.write" ~ capitalize(T.stringof) ~ "(v);");
 		}
 	}
 
-	public override void decode(Stream stream) {
+	public override pure nothrow @safe void decode(Stream stream) {
 		this.value.length = stream.readLength();
 		foreach(ref v ; this.value) {
 			mixin("v = stream.read" ~ capitalize(T.stringof) ~ "();");
@@ -463,7 +450,7 @@ class ArrayTag(T, ubyte _type) : NamedTag {
 	}
 
 	public override string toString() {
-		return this.format(capitalize(T.stringof) ~ "Array", to!string(this.value));
+		return capitalize(T.stringof) ~ "Array(" ~ to!string(this.value) ~ ")";
 	}
 	
 	alias value this;
@@ -471,8 +458,6 @@ class ArrayTag(T, ubyte _type) : NamedTag {
 }
 
 /**
- * $(TAGS)
- * 
  * Array of unsigned bytes (clients and other softwares may
  * interpret the bytes as signed due to limitations of the
  * programming language).
@@ -508,34 +493,39 @@ interface IList {
 	
 	public pure nothrow @property @safe @nogc ubyte childType();
 	
-	public @property @safe NamedTag[] namedTags();
+	public @property @safe Tag[] tags();
 	
 }
 
-class ListImpl(T:NamedTag) : NamedTag, IList {
+class ListImpl(T:Tag) : Tag, IList {
 
 	public T[] value;
 
-	public @safe this(string name, T[] value) {
-		super(name);
+	public pure nothrow @safe @nogc this(T[] value) {
 		this.value = value;
 	}
 
-	public override pure nothrow @property @safe @nogc ubyte type() {
+	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
 		return NBT_TYPE.LIST;
 	}
 
+	public override abstract pure nothrow @safe NamedTag rename(string name);
+
 	public override abstract pure nothrow @property @safe @nogc ubyte childType();
 
-	public @property @trusted NamedTag[] namedTags() {
-		static if(is(T == NamedTag)) {
+	public @property @trusted Tag[] tags() {
+		static if(is(T == Tag)) {
 			return this.value;
 		} else {
-			return cast(NamedTag[])this.value;
+			Tag[] ret = new Tag[this.value.length];
+			foreach(i, v; this.value) {
+				ret[i] = cast(Tag)v;
+			}
+			return ret;
 		}
 	}
 
-	public override void encode(Stream stream) {
+	public override pure nothrow @safe void encode(Stream stream) {
 		stream.writeByte(this.childType);
 		stream.writeLength(this.value.length);
 		foreach(v ; this.value) {
@@ -543,7 +533,7 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
 		}
 	}
 
-	public override abstract void decode(Stream stream);
+	public override abstract pure nothrow @safe void decode(Stream stream);
 
 	public override JSONValue toJSON() {
 		JSONValue[] json;
@@ -554,14 +544,12 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
 	}
 
 	public override string toString() {
-		return this.format("List", to!string(this.value));
+		return "List(" ~ to!string(this.value) ~ ")";
 	}
 
 }
 
 /**
- * $(TAGS)
- * 
  * Array of named tags of the same type.
  * Example:
  * ---
@@ -570,16 +558,26 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
  * new ListOf!(List!Compound)();  // Compound[][] -> NamedTag[string][][]
  * ---
  */
-class List : ListImpl!NamedTag {
+class List : ListImpl!Tag {
+
+	private static immutable Tag function() pure nothrow @safe[ubyte] constructors;
+
+	public static this() {
+		foreach(i, T; Tags) {
+			static if(is(T : Tag)) {
+				constructors[i] = { return new T(); };
+			}
+		}
+	}
 
 	private ubyte child_type = 0;
 	
-	public @safe @nogc this(string name, NamedTag[] tags=[]) {
-		super(name, tags);
+	public pure nothrow @safe @nogc this(Tag[] tags...) {
+		super(tags);
 	}
-	
-	public @safe @nogc this(NamedTag[] tags=[]) {
-		this("", tags);
+
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!List(name, this.value);
 	}
 
 	public pure nothrow @property @safe @nogc bool valid() {
@@ -600,40 +598,23 @@ class List : ListImpl!NamedTag {
 		return this.child_type != 0 ? this.child_type : (this.length == 0 ? NBT_TYPE.END : this.value[0].type);
 	}
 
-	public override void decode(Stream stream) {
+	public override pure nothrow @safe void decode(Stream stream) {
 		this.child_type = stream.readByte();
 		immutable length = stream.readLength();
-		NamedTag function() ctor = (){
-			switch(child_type) {
-				foreach(i, T; Tags) {
-					static if(is(T : NamedTag)) {
-						case i: return { return cast(NamedTag)new T(); };
-					}
-				}
-				default: return null;
-			}
-		}();
-		if(ctor !is null) {
+		auto ctor_ptr = this.child_type in constructors;
+		if(ctor_ptr) {
+			auto ctor = *ctor_ptr;
 			foreach(i ; 0..length) {
-				NamedTag tag = ctor();
+				Tag tag = ctor();
 				tag.decode(stream);
 				this.value ~= tag;
 			}
 		}
 	}
 	
-	/*public @safe T opCast(T)() if(is(T.TagType : NamedTag)) {
-		//TODO they must be validated
-		T.TagType[] array = new T.TagType[this.length];
-		foreach(size_t i, ref T.TagType tag; array) {
-			tag = cast(T.TagType)this[i];
-		}
-		return new T(this.name, array);
-	}*/
-	
 	public override bool opEquals(Object object) {
-		if(cast(NamedTag)object && cast(IList)object) {
-			return this.name == object.to!NamedTag.name && this.value == object.to!IList.namedTags;
+		if(cast(IList)object) {
+			return this.value == (cast(IList)object).tags;
 		}
 		return false;
 	}
@@ -643,9 +624,7 @@ class List : ListImpl!NamedTag {
 }
 
 /// ditto
-class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
-	
-	alias TagType = T;
+class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
 	public static immutable ubyte tagType;
 
@@ -653,43 +632,37 @@ class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
 		tagType = new T().type;
 	}
 	
-	public @safe this(E)(string name, E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
+	public pure nothrow @safe this(E)(E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
 		static if(is(E == T)) {
-			super(name, tags);
+			super(tags);
 		} else {
 			T[] nt;
 			foreach(t ; tags) {
-				nt ~= new T("", t);
+				nt ~= new T(t);
 			}
-			this(name, nt);
+			this(nt);
 		}
 	}
-	
-	public @safe this(E)(E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
-		this("", tags);
+
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!(ListOf!T)(name, this.value);
 	}
 	
 	public final override pure nothrow @property @safe @nogc ubyte childType() {
 		return tagType;
 	}
 
-	public override void decode(Stream stream) {
+	public override pure nothrow @safe void decode(Stream stream) {
 		// shouldn't be called
-		if(stream.readByte() != this.childType) throw new Exception("Decoding the wrong list");
-		foreach(i ; 0..stream.readLength()) {
-			T tag = new T();
-			tag.decode(stream);
-			this.value ~= tag;
-		}
 	}
 	
 	public T opCast(T)() if(is(T == List)) {
-		return new List(this.name, cast(NamedTag[])this[]);
+		return new List(cast(Tag[])this.value);
 	}
 	
 	public override bool opEquals(Object object) {
-		if(cast(NamedTag)object && cast(IList)object) {
-			return this.name == object.to!NamedTag.name && this.namedTags == object.to!IList.namedTags;
+		if(cast(IList)object) {
+			return this.tags == (cast(IList)object).tags;
 		}
 		return false;
 	}
@@ -704,12 +677,11 @@ unittest {
 	assert(cast(List)list !is null);
 	assert(list.length == 2);
 	assert(list[0] == 1 && list[1] == 2);
+	assert(new ListOf!Int(1, 2, 3).tags == [new Int(1), new Int(2), new Int(3)]);
 	
 }
 
 /**
- * $(TAGS)
- * 
  * Associative array of named tags (that can be of different types).
  * Example:
  * ---
@@ -718,39 +690,39 @@ unittest {
  * compound["byte"] = new Byte(18);
  * ---
  */
-class Compound : NamedTag {
+class Compound : Tag {
 
-	private NamedTag[string] value;
+	private NamedTag[] value;
+	private string[] n_names; // to mantain order and avoid the use of associative array's opApply
 	
-	public @safe this(string name, NamedTag[] tags...) {
-		super(name);
-		foreach(NamedTag tag ; tags) {
-			this[] = tag;
-		}
-	}
-	
-	public @safe this(NamedTag[] tags...) {
-		this("", tags);
-	}
-
-	public @safe this(string name, NamedTag[string] tags) {
-		super(name);
-		foreach(n, ref nt; tags) {
-			nt.n_name = n;
-		}
+	public pure nothrow @safe this(NamedTag[] tags...) {
 		this.value = tags;
+		foreach(tag ; tags) {
+			this.n_names ~= tag.name;
+		}
 	}
 
-	public override pure nothrow @property @safe @nogc ubyte type() {
+	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
 		return NBT_TYPE.COMPOUND;
+	}
+
+	public override pure nothrow @safe NamedTag rename(string name) {
+		return new Named!Compound(name, this.value);
+	}
+
+	protected pure nothrow @safe ptrdiff_t search(string cmp) {
+		foreach(i, name; this.n_names) {
+			if(name == cmp) return i;
+		}
+		return -1;
 	}
 	
 	/**
 	 * Checks whether or not a value is in the associative array.
 	 * Returns: true if the key is found, false otherwise
 	 */
-	public @safe bool has(string key) {
-		return key in this.value ? true : false;
+	public pure nothrow @safe bool has(string name) {
+		return this.search(name) >= 0;
 	}
 	
 	/**
@@ -758,49 +730,9 @@ class Compound : NamedTag {
 	 * is of the same type of T.
 	 * Returns: true if the value is found and is of the type T, false otherwise
 	 */
-	public @trusted bool has(T:NamedTag)(string key) {
-		NamedTag* ret = key in this.value;
-		return ret && cast(T)*ret;
-	}
-	
-	/**
-	 * Gets the pointer to the tag associated with the given key.
-	 * Returns: the pointer to a NamedTag in the array or null if the given key isn't in the array
-	 * Example:
-	 * ---
-	 * if(NamedTag* test = ("test" in compound)) {
-	 *    d("test is in the compound: ", *test);
-	 * }
-	 * ---
-	 */
-	public @safe NamedTag* opBinaryRight(string op)(string key) if(op == "in") {
-		return key in this.value;
-	}
-	
-	/**
-	 * Gets the array of named tags (without the keys).
-	 * To get the associative array of named tags use the
-	 * property value.
-	 * Example:
-	 * ---
-	 * Compound compound = new Compound([new Byte(1), new Int(2)]);
-	 * assert(compound[] == compound.value.values);
-	 * ---
-	 */
-	public @trusted NamedTag[] opIndex() {
-		return this.value.values;
-	}
-	
-	/**
-	 * Gets the element at the given index.
-	 * Throws: RangeError if the given index is not in the array
-	 * Example:
-	 * ---
-	 * assert(new Compound("", ["test": new String("test")])[0] == "test");
-	 * ---
-	 */
-	public @safe NamedTag opIndex(string index) {
-		return this.value[index];
+	public pure nothrow @safe bool has(T:Tag)(string name) {
+		auto index = this.search(name);
+		return index >= 0 && cast(T)this.value[index];
 	}
 	
 	/**
@@ -813,8 +745,35 @@ class Compound : NamedTag {
 	 * }
 	 * ---
 	 */
-	public @safe NamedTag* opBinaryRight(string op : "in")(string index) {
-		return index in this.value;
+	public pure nothrow @safe Tag* opBinaryRight(string op : "in")(string name) {
+		auto index = this.search(name);
+		return index >= 0 ? &this.value[index] : null;
+	}
+	
+	/**
+	 * Gets the array of named tags (without the keys).
+	 * To get the associative array of named tags use the
+	 * property value.
+	 * Example:
+	 * ---
+	 * Compound compound = new Compound([new Byte(1), new Int(2)]);
+	 * assert(compound[] == compound.value.values);
+	 * ---
+	 */
+	public pure nothrow @safe NamedTag[] opIndex() {
+		return this.value;
+	}
+	
+	/**
+	 * Gets the element at the given index.
+	 * Throws: RangeError if the given index is not in the array
+	 * Example:
+	 * ---
+	 * assert(new Compound("", ["test": new String("test")])[0] == "test");
+	 * ---
+	 */
+	public pure nothrow @safe Tag opIndex(string name) {
+		return this.value[this.search(name)];
 	}
 	
 	/**
@@ -827,8 +786,8 @@ class Compound : NamedTag {
 	 * assert(is(typeof(compound.get!String("test")) == String));
 	 * ---
 	 */
-	public @trusted T get(T:NamedTag)(string index) {
-		return cast(T)this.value[index];
+	public pure nothrow @safe T get(T:Tag)(string name) {
+		return cast(T)this[name];
 	}
 	
 	/**
@@ -843,22 +802,22 @@ class Compound : NamedTag {
 	 * compound["string"] = "Another string";
 	 * ---
 	 */
-	public @safe void opIndexAssign(T)(T value, string index) if(is(T : NamedTag) || isNumeric!T || is(T == bool) || is(T == string) || is(T == ubyte[]) || is(T == byte[]) || is(T == int[])) {
-		static if(is(T : NamedTag)) {
-			value.n_name = index;
-			this.value[index] = value;
+	public pure nothrow @safe void opIndexAssign(T)(T value, string name) if(is(T : Tag) || isNumeric!T || is(T == bool) || is(T == string) || is(T == ubyte[]) || is(T == byte[]) || is(T == int[])) {
+		NamedTag tag;
+		static if(is(T : Tag)) {
+			tag = value.rename(name); // convert to named tag
 		} else {
-			static if(is(T == bool) || is(T == byte) || is(T == ubyte)) auto v = new Byte(index, value);
-			else static if(is(T == short) || is(T == ushort)) auto v = new Short(index, value);
-			else static if(is(T == int) || is(T == uint)) auto v = new Int(index, value);
-			else static if(is(T == long) || is(T == ulong)) auto v = new Long(index, value);
-			else static if(is(T == float)) auto v = new Float(index, value);
-			else static if(is(T == double)) auto v = new Double(index, value);
-			else static if(is(T == string)) auto v = new String(index, value);
-			else static if(is(T == ubyte[]) || is(T == byte[])) auto v = new ByteArray(index, value);
-			else auto v = new IntArray(index, value);
-			this.value[index] = v;
+			static if(is(T == bool) || is(T == byte) || is(T == ubyte)) tag = new Named!Byte(name, value);
+			else static if(is(T == short) || is(T == ushort)) tag = new Named!Short(name, value);
+			else static if(is(T == int) || is(T == uint)) tag = new Named!Int(name, value);
+			else static if(is(T == long) || is(T == ulong)) tag = new Named!Long(name, value);
+			else static if(is(T == float)) tag = new Named!Float(name, value);
+			else static if(is(T == double)) tag = new Named!Double(name, value);
+			else static if(is(T == string)) tag = new Named!String(name, value);
+			else static if(is(T == ubyte[]) || is(T == byte[])) tag = new Named!ByteArray(name, value);
+			else tag = new Named!IntArray(name, value);
 		}
+		this[] = tag;
 	}
 	
 	/**
@@ -870,8 +829,14 @@ class Compound : NamedTag {
 	 * assert(compound["test"] == "value");
 	 * ---
 	 */
-	public @safe void opIndexAssign(NamedTag value) {
-		this.value[value.name] = value;
+	public pure nothrow @safe void opIndexAssign(NamedTag tag) {
+		auto i = this.search(tag.name);
+		if(i >= 0) {
+			this.value[i] = tag;
+		} else {
+			this.value ~= tag;
+			this.n_names ~= tag.name;
+		}
 	}
 	
 	/**
@@ -884,8 +849,12 @@ class Compound : NamedTag {
 	 * assert("string" !in compound);
 	 * ---
 	 */
-	public @safe void remove(string index) {
-		this.value.remove(index);
+	public @safe void remove(string name) {
+		auto index = this.search(name);
+		if(index >= 0) {
+			this.value = this.value[0..index] ~ this.value[index+1..$];
+			this.n_names = this.n_names[0..index] ~ this.n_names[index+1..$];
+		}
 	}
 	
 	/// Gets the length of the array (or the number of NamedTags in it).
@@ -905,28 +874,31 @@ class Compound : NamedTag {
 	 * assert(new Compound("", ["a": new String("a"), "b": new String("b")]).keys == ["a", "b"]);
 	 * ---
 	 */
-	public @property @trusted string[] keys() {
-		return this.value.keys;
+	public pure nothrow @property @safe @nogc string[] names() {
+		return this.n_names;
 	}
 	
 	/**
 	 * Creates an exact duplicate of the tag.
 	 */
 	public @property Compound dup() {
-		return new Compound(this.name, this.value.values);
+		auto ret = new Compound();
+		ret.value = this.value.dup;
+		ret.n_names = this.n_names.dup;
+		return ret;
 	}
 
-	public override void encode(Stream stream) {
+	public override pure nothrow @safe void encode(Stream stream) {
 		foreach(tag ; this.value) {
-			stream.writeTag(tag);
+			stream.writeNamedTag(tag);
 		}
 		stream.writeByte(NBT_TYPE.END);
 	}
 
-	public override void decode(Stream stream) {
+	public override pure nothrow @safe void decode(Stream stream) {
 		NamedTag next;
-		while((next = cast(NamedTag)stream.readTag()) !is null) {
-			this.value[next.name] = next;
+		while((next = stream.readNamedTag()) !is null) {
+			this[] = next;
 		}
 	}
 
@@ -941,17 +913,17 @@ class Compound : NamedTag {
 	public override bool opEquals(Object object) {
 		if(cast(Compound)object) {
 			Compound compound = cast(Compound)object;
-			return this.name == compound.name && this.opEquals(compound.value);
+			this.opEquals(compound.value);
 		}
 		return false;
 	}
 	
-	public bool opEquals(NamedTag[string] tags) {
+	public bool opEquals(NamedTag[] tags) {
 		return this.value == tags;
 	}
 
 	public override string toString() {
-		return this.format("Compound", to!string(this.value));
+		return "Compound(" ~ to!string(this.value) ~ ")";
 	}
 	
 }
@@ -961,11 +933,11 @@ unittest {
 	Compound compound = new Compound();
 
 	compound["0"] = "string";
-	compound[] = new Int("int", 44);
+	compound[] = new Named!Int("int", 44);
 	assert(cast(String)compound["0"]);
 	assert(cast(Int)compound["int"]);
 	assert(compound.get!String("0") == "string");
 	assert(compound.get!Int("int") == 44);
-	assert(compound == new Compound(new Int("int", 44), new String("0", "string")));
+	assert(compound == new Compound(new Named!Int("int", 44), new Named!String("0", "string")));
 	
 }

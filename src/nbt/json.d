@@ -30,7 +30,7 @@ unittest {
 	assert(toJSON(compound) == JSONValue(["a": 44]));
 	
 	assert(toJSON(new Int(12)) == JSONValue(12));
-	assert(toJSON(new ListOf!Int(new Int(9))) == JSONValue([9]));
+	assert(toJSON(new ListOf!Int(9, 10)) == JSONValue([9, 10]));
 	
 }
 
@@ -40,33 +40,33 @@ unittest {
 Tag toNBT(JSONValue json) {
 	final switch(json.type) {
 		case JSON_TYPE.OBJECT:
-			NamedTag[string] nt;
-			foreach(name, value; json.object) {
-				auto tag = cast(NamedTag)toNBT(value);
-				if(tag !is null) nt[name] = tag;
-			}
-			return new Compound("", nt);
-		case JSON_TYPE.ARRAY:
 			NamedTag[] nt;
-			foreach(value ; json.array) {
-				auto tag = cast(NamedTag)toNBT(value);
-				if(tag !is null) nt ~= tag;
+			foreach(name, value; json.object) {
+				auto tag = toNBT(value);
+				if(tag !is null) nt ~= tag.rename(name);
 			}
-			return new List("", nt);
+			return new Compound(nt);
+		case JSON_TYPE.ARRAY:
+			Tag[] t;
+			foreach(value ; json.array) {
+				auto tag = toNBT(value);
+				if(tag !is null) t ~= tag;
+			}
+			return new List(t);
 		case JSON_TYPE.STRING:
-			return new String("", json.str);
+			return new String(json.str);
 		case JSON_TYPE.INTEGER:
-			return new Long("", json.integer);
+			return new Long(json.integer);
 		case JSON_TYPE.UINTEGER:
-			return new Long("", json.uinteger & long.max);
+			return new Long(json.uinteger & long.max);
 		case JSON_TYPE.FLOAT:
-			return new Double("", json.floating);
+			return new Double(json.floating);
 		case JSON_TYPE.TRUE:
-			return new Bool("", true);
+			return new Bool(true);
 		case JSON_TYPE.FALSE:
-			return new Bool("", false);
+			return new Bool(false);
 		case JSON_TYPE.NULL:
-			return new End();
+			return null;
 	}
 }
 
@@ -75,6 +75,6 @@ unittest {
 
 	assert(toNBT(JSONValue(true)) == new Byte(1));
 	assert(toNBT(JSONValue([1, 2, 3])) == new ListOf!Long(1, 2, 3));
-	assert(toNBT(JSONValue(["a": [1]])) == new Compound(new ListOf!Long("a", 1)));
+	assert(toNBT(JSONValue(["a": [1]])) == new Compound(new Named!(ListOf!Long)("a", 1)));
 
 }
