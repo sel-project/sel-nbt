@@ -55,7 +55,7 @@ import nbt.stream : Stream;
  * NBT's ids, as unsigned bytes, used by for client-server
  * and generic io communication.
  */
-enum NBT : ubyte {
+enum NBT_TYPE : ubyte {
 	
 	END = 0,
 	BYTE = 1,
@@ -81,7 +81,7 @@ alias Tags = TypeTuple!(End, Byte, Short, Int, Long, Float, Double, ByteArray, S
  */
 interface Tag {
 	
-	public abstract pure nothrow @property @safe @nogc ubyte id();
+	public abstract pure nothrow @property @safe @nogc ubyte type();
 	
 	/**
 	 * Encodes the tag's value as json.
@@ -99,8 +99,8 @@ interface Tag {
  */
 final class End : Tag {
 	
-	public override pure nothrow @property @safe @nogc ubyte id() {
-		return NBT.END;
+	public override pure nothrow @property @safe @nogc ubyte type() {
+		return NBT_TYPE.END;
 	}
 
 	public override JSONValue toJSON() {
@@ -125,7 +125,7 @@ abstract class NamedTag : Tag {
 		this.n_name = name;
 	}
 
-	public override abstract pure nothrow @property @safe @nogc ubyte id();
+	public override abstract pure nothrow @property @safe @nogc ubyte type();
 	
 	/**
 	 * Gets the name of the tag.
@@ -156,9 +156,7 @@ abstract class NamedTag : Tag {
  * assert(new SimpleTag!(char, 12)('c') == 'c');
  * ---
  */
-class SimpleTag(T, ubyte type) : NamedTag {
-	
-	alias Type = T;
+class SimpleTag(T, ubyte _type) : NamedTag {
 	
 	public T value;
 
@@ -171,8 +169,8 @@ class SimpleTag(T, ubyte type) : NamedTag {
 		this("", value);
 	}
 
-	public final override pure nothrow @property @safe @nogc ubyte id() {
-		return type;
+	public final override pure nothrow @property @safe @nogc ubyte type() {
+		return _type;
 	}
 
 	public override void encode(Stream stream) {
@@ -222,7 +220,7 @@ class SimpleTag(T, ubyte type) : NamedTag {
  * assert(cast(ubyte)(new Byte(-1)) == 255);
  * ---
  */
-alias Byte = SimpleTag!(byte, NBT.BYTE);
+alias Byte = SimpleTag!(byte, NBT_TYPE.BYTE);
 
 /**
  * $(TAGS)
@@ -246,7 +244,7 @@ alias Bool = Byte;
  * This tag can also be converted to its unsigned version
  * doing a simple cast to ushort.
  */
-alias Short = SimpleTag!(short, NBT.SHORT);
+alias Short = SimpleTag!(short, NBT_TYPE.SHORT);
 
 /**
  * $(TAGS)
@@ -258,14 +256,14 @@ alias Short = SimpleTag!(short, NBT.SHORT);
  * <a href="#IntArray">Int Array</a> is a tag with an array
  * of signed integers.
  */
-alias Int = SimpleTag!(int, NBT.INT);
+alias Int = SimpleTag!(int, NBT_TYPE.INT);
 
 /**
  * $(TAGS)
  * 
  * Tag with a signed long.
  */
-alias Long = SimpleTag!(long, NBT.LONG);
+alias Long = SimpleTag!(long, NBT_TYPE.LONG);
 
 /**
  * $(TAGS)
@@ -279,7 +277,7 @@ alias Long = SimpleTag!(long, NBT.LONG);
  * More informations about the NaN value and its encoding
  * can be found on <a href="#https://en.wikipedia.org/wiki/NaN">Wikipedia</a>.
  */
-alias Float = SimpleTag!(float, NBT.FLOAT);
+alias Float = SimpleTag!(float, NBT_TYPE.FLOAT);
 
 /**
  * $(TAGS)
@@ -290,7 +288,7 @@ alias Float = SimpleTag!(float, NBT.FLOAT);
  * See <a href="#Float">Float</a>'s documentation for informations
  * about the NaN value and its support inside and outside SEL.
  */
-alias Double = SimpleTag!(double, NBT.DOUBLE);
+alias Double = SimpleTag!(double, NBT_TYPE.DOUBLE);
 
 /**
  * $(TAGS)
@@ -303,7 +301,7 @@ alias Double = SimpleTag!(double, NBT.DOUBLE);
  * assert(new String("", "test") == "test");
  * ---
  */
-alias String = SimpleTag!(string, NBT.STRING);
+alias String = SimpleTag!(string, NBT_TYPE.STRING);
 
 unittest {
 	
@@ -331,7 +329,7 @@ unittest {
  * assert(b.length == 1 && b[0] == 14);
  * ---
  */
-class ArrayTag(T, ubyte type) : NamedTag {
+class ArrayTag(T, ubyte _type) : NamedTag {
 
 	public T[] value;
 
@@ -344,8 +342,8 @@ class ArrayTag(T, ubyte type) : NamedTag {
 		this("", value);
 	}
 
-	public override pure nothrow @property @safe @nogc ubyte id() {
-		return type;
+	public override pure nothrow @property @safe @nogc ubyte type() {
+		return _type;
 	}
 	
 	/**
@@ -489,7 +487,7 @@ class ArrayTag(T, ubyte type) : NamedTag {
  * assert(signed == [0, 1, -1]);
  * ---
  */
-alias ByteArray = ArrayTag!(byte, NBT.BYTE_ARRAY);
+alias ByteArray = ArrayTag!(byte, NBT_TYPE.BYTE_ARRAY);
 
 /**
  * $(TAGS)
@@ -504,11 +502,11 @@ alias ByteArray = ArrayTag!(byte, NBT.BYTE_ARRAY);
  * assert(cast(uint[])signed == [uint.max]);
  * ---
  */
-alias IntArray = ArrayTag!(int, NBT.INT_ARRAY);
+alias IntArray = ArrayTag!(int, NBT_TYPE.INT_ARRAY);
 
 interface IList {
 	
-	public pure nothrow @property @safe @nogc ubyte childId();
+	public pure nothrow @property @safe @nogc ubyte childType();
 	
 	public @property @safe NamedTag[] namedTags();
 	
@@ -523,11 +521,11 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
 		this.value = value;
 	}
 
-	public override pure nothrow @property @safe @nogc ubyte id() {
-		return NBT.LIST;
+	public override pure nothrow @property @safe @nogc ubyte type() {
+		return NBT_TYPE.LIST;
 	}
 
-	public override abstract pure nothrow @property @safe @nogc ubyte childId();
+	public override abstract pure nothrow @property @safe @nogc ubyte childType();
 
 	public @property @trusted NamedTag[] namedTags() {
 		static if(is(T == NamedTag)) {
@@ -538,7 +536,7 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
 	}
 
 	public override void encode(Stream stream) {
-		stream.writeByte(this.childId);
+		stream.writeByte(this.childType);
 		stream.writeLength(this.value.length);
 		foreach(v ; this.value) {
 			v.encode(stream);
@@ -574,7 +572,7 @@ class ListImpl(T:NamedTag) : NamedTag, IList {
  */
 class List : ListImpl!NamedTag {
 
-	private ubyte child_id = 0;
+	private ubyte child_type = 0;
 	
 	public @safe @nogc this(string name, NamedTag[] tags=[]) {
 		super(name, tags);
@@ -585,28 +583,28 @@ class List : ListImpl!NamedTag {
 	}
 
 	public pure nothrow @property @safe @nogc bool valid() {
-		ubyte id;
-		if(this.child_id) {
-			id = this.child_id;
+		ubyte type;
+		if(this.child_type) {
+			type = this.child_type;
 		} else {
 			if(this.value.length == 0) return false;
-			id = this.value[0].id;
+			type = this.value[0].type;
 		}
 		foreach(v ; this.value) {
-			if(v.id != id) return false;
+			if(v.type != type) return false;
 		}
 		return true;
 	}
 	
-	public final override pure nothrow @property @safe @nogc ubyte childId() {
-		return this.child_id != 0 ? this.child_id : (this.length == 0 ? NBT.END : this.value[0].id);
+	public final override pure nothrow @property @safe @nogc ubyte childType() {
+		return this.child_type != 0 ? this.child_type : (this.length == 0 ? NBT_TYPE.END : this.value[0].type);
 	}
 
 	public override void decode(Stream stream) {
-		this.child_id = stream.readByte();
+		this.child_type = stream.readByte();
 		immutable length = stream.readLength();
 		NamedTag function() ctor = (){
-			switch(child_id) {
+			switch(child_type) {
 				foreach(i, T; Tags) {
 					static if(is(T : NamedTag)) {
 						case i: return { return cast(NamedTag)new T(); };
@@ -649,10 +647,10 @@ class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
 	
 	alias TagType = T;
 
-	public static immutable ubyte tagId;
+	public static immutable ubyte tagType;
 
 	public static this() {
-		tagId = new T().id;
+		tagType = new T().type;
 	}
 	
 	public @safe this(E)(string name, E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
@@ -671,13 +669,13 @@ class ListOf(T:NamedTag) : ListImpl!T if(!isAbstractClass!T) {
 		this("", tags);
 	}
 	
-	public final override pure nothrow @property @safe @nogc ubyte childId() {
-		return tagId;
+	public final override pure nothrow @property @safe @nogc ubyte childType() {
+		return tagType;
 	}
 
 	public override void decode(Stream stream) {
 		// shouldn't be called
-		if(stream.readByte() != this.childId) throw new Exception("Decoding the wrong list");
+		if(stream.readByte() != this.childType) throw new Exception("Decoding the wrong list");
 		foreach(i ; 0..stream.readLength()) {
 			T tag = new T();
 			tag.decode(stream);
@@ -743,8 +741,8 @@ class Compound : NamedTag {
 		this.value = tags;
 	}
 
-	public final override pure nothrow @property @safe @nogc ubyte id() {
-		return NBT.COMPOUND;
+	public override pure nothrow @property @safe @nogc ubyte type() {
+		return NBT_TYPE.COMPOUND;
 	}
 	
 	/**
@@ -761,23 +759,8 @@ class Compound : NamedTag {
 	 * Returns: true if the value is found and is of the type T, false otherwise
 	 */
 	public @trusted bool has(T:NamedTag)(string key) {
-		if(!this.has(key)) return false;
-		if(cast(T)this.value[key]) {
-			return true;
-		} else {
-			static if(is(T : IList)) {
-				if(cast(IList)this.value[key]) {
-					static if(is(T == List)) {
-						// T is List, value is ListOf
-						return true;
-					} else {
-						// T is ListOf, value is List
-						return (cast(List)this.value[key]).childId == T.TagType.ID;
-					}
-				}
-			}
-			return false;
-		}
+		NamedTag* ret = key in this.value;
+		return ret && cast(T)*ret;
 	}
 	
 	/**
@@ -845,22 +828,6 @@ class Compound : NamedTag {
 	 * ---
 	 */
 	public @trusted T get(T:NamedTag)(string index) {
-		/*NamedTag ret = this.value[index];
-		if(cast(T)ret) return cast(T)ret;
-		static if(is(T : IList)) {
-			if(cast(IList)ret) {
-				static if(is(T == List)) {
-					// T is List, ret is ListOf
-					return new List(ret.name, (cast(List)ret).namedTags);
-				} else {
-					// T is ListOf, ret is List
-					if((cast(IList)ret).childId == T.TagType.ID) {
-						return cast(T)cast(List)ret;
-					}
-				}
-			}
-		}
-		return null;*/
 		return cast(T)this.value[index];
 	}
 	
@@ -953,8 +920,7 @@ class Compound : NamedTag {
 		foreach(tag ; this.value) {
 			stream.writeTag(tag);
 		}
-		//new End().encode(stream);
-		stream.writeByte(NBT.END);
+		stream.writeByte(NBT_TYPE.END);
 	}
 
 	public override void decode(Stream stream) {
@@ -964,7 +930,7 @@ class Compound : NamedTag {
 		}
 	}
 
-	public override @property JSONValue toJSON() {
+	public override JSONValue toJSON() {
 		JSONValue[string] json;
 		foreach(tag ; this.value) {
 			json[tag.name] = tag.toJSON();

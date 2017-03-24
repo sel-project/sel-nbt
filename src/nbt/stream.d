@@ -15,7 +15,7 @@ class Stream {
 	}
 
 	public void writeTag(Tag tag) {
-		this.writeByte(tag.id);
+		this.writeByte(tag.type);
 		auto named = cast(NamedTag)tag;
 		if(named !is null) {
 			this.writeString(named.name);
@@ -41,17 +41,17 @@ class Stream {
 
 	public Tag readTag() {
 		switch(this.readByte()) {
-			case NBT.BYTE: return this.readTagImpl!Byte();
-			case NBT.SHORT: return this.readTagImpl!Short();
-			case NBT.INT: return this.readTagImpl!Int();
-			case NBT.LONG: return this.readTagImpl!Long();
-			case NBT.FLOAT: return this.readTagImpl!Float();
-			case NBT.DOUBLE: return this.readTagImpl!Double();
-			case NBT.BYTE_ARRAY: return this.readTagImpl!ByteArray();
-			case NBT.STRING: return this.readTagImpl!String();
-			case NBT.LIST: return this.readTagImpl!List();
-			case NBT.COMPOUND: return this.readTagImpl!Compound();
-			case NBT.INT_ARRAY: return this.readTagImpl!IntArray();
+			case NBT_TYPE.BYTE: return this.readTagImpl!Byte();
+			case NBT_TYPE.SHORT: return this.readTagImpl!Short();
+			case NBT_TYPE.INT: return this.readTagImpl!Int();
+			case NBT_TYPE.LONG: return this.readTagImpl!Long();
+			case NBT_TYPE.FLOAT: return this.readTagImpl!Float();
+			case NBT_TYPE.DOUBLE: return this.readTagImpl!Double();
+			case NBT_TYPE.BYTE_ARRAY: return this.readTagImpl!ByteArray();
+			case NBT_TYPE.STRING: return this.readTagImpl!String();
+			case NBT_TYPE.LIST: return this.readTagImpl!List();
+			case NBT_TYPE.COMPOUND: return this.readTagImpl!Compound();
+			case NBT_TYPE.INT_ARRAY: return this.readTagImpl!IntArray();
 			default: return new End();
 		}
 	}
