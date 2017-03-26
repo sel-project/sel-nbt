@@ -55,8 +55,15 @@ interface Tag {
 
 	/**
 	 * Gets the tag's type.
+	 * Returns: a value in the NBT_TYPE enum
+	 * Example:
+	 * ---
+	 * assert(new Byte().type == NBT_TYPE.BYTE);
+	 * assert(new List().type == NB_TYPE.LIST);
+	 * assert(new Tags[NBT_TYPE.INT]().type == NBT_TYPE.INT);
+	 * ---
 	 */
-	public pure nothrow @property @safe @nogc NBT_TYPE type();
+	public pure nothrow @property @safe @nogc const NBT_TYPE type();
 
 	/**
 	 * Creates a NamedTag maintaing the tag's properties.
@@ -69,28 +76,29 @@ interface Tag {
 	 * assert(named == 22);
 	 * ---
 	 */
-	public pure nothrow @safe NamedTag rename(string name);
+	public pure nothrow @safe NamedTag rename(string);
 
 	/**
 	 * Encodes the tag's body.
 	 */
-	public pure nothrow @safe void encode(Stream stream);
+	public pure nothrow @safe void encode(Stream);
 
 	/**
 	 * Decodes the tag's body.
 	 */
-	public pure nothrow @safe void decode(Stream stream);
+	public pure nothrow @safe void decode(Stream);
 	
 	/**
 	 * Encodes the tag's value as json.
 	 */
 	public JSONValue toJSON();
 
+	/**
+	 * Encodes the tag a human-readable string.
+	 */
 	public string toString();
 
-	protected @property string typeString();
-
-	protected @property string valueString();
+	protected string toValueString();
 	
 }
 
@@ -129,10 +137,32 @@ template Named(T:Tag) if(is(T == class) && !is(T : NamedTag)) {
 		}
 
 		public override string toString() {
-			return this.typeString ~ "(" ~ JSONValue(this.name).toString() ~ ": " ~ this.valueString ~ ")";
+			return this.type.to!string ~ "(" ~ JSONValue(this.name).toString() ~ ": " ~ this.toValueString ~ ")";
 		}
 
 	}
+
+}
+
+abstract class TagImpl(NBT_TYPE _type) : Tag {
+
+	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
+		return _type;
+	}
+
+	public override abstract pure nothrow @safe NamedTag rename(string);
+
+	public override abstract pure nothrow @safe void encode(Stream);
+
+	public override abstract pure nothrow @safe void decode(Stream);
+
+	public override abstract JSONValue toJSON();
+
+	public override string toString() {
+		return this.type.to!string ~ "(" ~ this.toValueString() ~ ")";
+	}
+
+	protected override abstract string toValueString();
 
 }
 
@@ -145,16 +175,12 @@ template Named(T:Tag) if(is(T == class) && !is(T : NamedTag)) {
  * assert(new SimpleTag!(char, 12)('c') == 'c');
  * ---
  */
-class SimpleTag(T, NBT_TYPE _type) : Tag {
+class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
 	
 	public T value;
 
 	public pure nothrow @safe @nogc this(T value=T.init) {
 		this.value = value;
-	}
-
-	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
-		return _type;
 	}
 
 	public override pure nothrow @safe NamedTag rename(string name) {
@@ -190,16 +216,8 @@ class SimpleTag(T, NBT_TYPE _type) : Tag {
 	public override JSONValue toJSON() {
 		return JSONValue(this.value);
 	}
-
-	public override string toString() {
-		return this.typeString ~ "(" ~ this.valueString ~ ")";
-	}
 	
-	public override @property string typeString() {
-		return capitalize(T.stringof);
-	}
-	
-	public override @property string valueString() {
+	public override string toValueString() {
 		return to!string(this.value);
 	}
 	
@@ -308,7 +326,7 @@ unittest {
 	t = 100;
 	assert(t == 100);
 
-	assert(new Long(44).toString() == "Long(44)"); // format may change
+	assert(new Long(44).toString() == "LONG(44)"); // format may change
 
 	import std.system : Endian;
 	Stream stream = new ClassicStream!(Endian.bigEndian)();
@@ -336,7 +354,7 @@ unittest {
  * assert(b.length == 1 && b[0] == 14);
  * ---
  */
-class ArrayTag(T, NBT_TYPE _type) : Tag {
+class ArrayTag(T, NBT_TYPE _type) : TagImpl!_type {
 
 	public T[] value;
 
@@ -344,11 +362,7 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
 		this.value = value;
 	}
 
-	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
-		return _type;
-	}
-
-	public override abstract pure nothrow @safe NamedTag rename(string name);
+	public override abstract pure nothrow @safe NamedTag rename(string);
 	
 	/**
 	 * Concatenates T, an array of T or a NBT array of T to the tag.
@@ -404,21 +418,13 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
 		return this.value.length == 0;
 	}
 
-	public override abstract pure nothrow @safe void encode(Stream stream);
+	public override abstract pure nothrow @safe void encode(Stream);
 
-	public override abstract pure nothrow @safe void decode(Stream stream);
+	public override abstract pure nothrow @safe void decode(Stream);
 
 	public override abstract JSONValue toJSON();
 	
-	public override string toString() {
-		return this.typeString ~ "(" ~ this.valueString ~ ")";
-	}
-	
-	public override @property string typeString() {
-		return capitalize(T.stringof) ~ "Array";
-	}
-	
-	public override @property string valueString() {
+	public override string toValueString() {
 		return to!string(this.value);
 	}
 	
@@ -599,10 +605,6 @@ class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 		}
 		return JSONValue(json);
 	}
-	
-	public override @property string typeString() {
-		return "List";
-	}
 
 }
 
@@ -728,7 +730,7 @@ unittest {
  * compound["byte"] = new Byte(18);
  * ---
  */
-class Compound : Tag {
+class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 
 	private NamedTag[] value;
 	private string[] n_names; // to mantain order and avoid the use of associative array's opApply
@@ -738,10 +740,6 @@ class Compound : Tag {
 		foreach(tag ; tags) {
 			this.n_names ~= tag.name;
 		}
-	}
-
-	public override pure nothrow @property @safe @nogc NBT_TYPE type() {
-		return NBT_TYPE.COMPOUND;
 	}
 
 	public override pure nothrow @safe NamedTag rename(string name) {
@@ -935,7 +933,7 @@ class Compound : Tag {
 
 	public override pure nothrow @safe void decode(Stream stream) {
 		NamedTag next;
-		while((next = stream.readNamedTag()) !is null) {
+		while(this.length < stream.options.maxCompoundLength && (next = stream.readNamedTag()) !is null) {
 			this[] = next;
 		}
 	}
@@ -966,15 +964,7 @@ class Compound : Tag {
 		return true;
 	}
 	
-	public override string toString() {
-		return this.typeString ~ "(" ~ this.valueString ~ ")";
-	}
-	
-	public override @property string typeString() {
-		return "Compound";
-	}
-	
-	public override @property string valueString() {
+	public override string toValueString() {
 		return to!string(this.value);
 	}
 	

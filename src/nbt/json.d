@@ -36,6 +36,17 @@ unittest {
 
 /**
  * Converts a JSONValue into a Tag.
+ * Returns:
+ * 		an instance of Compound when the json is an object, and instance of
+ * 		List when the json is an array, an instance of String when the json
+ * 		is a string, an instance of Long when the json is an integer, an 
+ * 		instance of Double when the json is a floating point number, an
+ * 		instance of Byte (with values 0 and 1) when the json is a boolean
+ * 		and null when the json is null.
+ * Example:
+ * ---
+ * assert(toNBT(parseJSON(`{"a":42}`)) == new Compound(new Named!Long("a", 42)));
+ * ---
  */
 Tag toNBT(JSONValue json) {
 	final switch(json.type) {

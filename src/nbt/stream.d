@@ -27,12 +27,22 @@ private pure nothrow @safe string endianString(Endian endianness) {
 	return endianness == Endian.littleEndian ? "littleEndian" : "bigEndian";
 }
 
+struct Options {
+	
+	size_t maxLength = int.max;
+	size_t maxCompoundLength = int.max;
+	
+};
+
 class Stream {
 
 	public ubyte[] buffer;
+
+	public Options options;
 	
-	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[], Options options=Options.init) {
 		this.buffer = buffer;
+		this.options = options;
 	}
 
 	public pure nothrow @safe void writeTag(Tag tag) {
@@ -113,8 +123,8 @@ class Stream {
 
 class ClassicStream(Endian endianness) : Stream {
 	
-	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
-		super(buffer);
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[], Options options=Options.init) {
+		super(buffer, options);
 	}
 
 	private mixin template Impl(T) {
@@ -170,8 +180,8 @@ class ClassicStream(Endian endianness) : Stream {
 
 class NetworkStream(Endian endianness) : ClassicStream!(endianness) {
 
-	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
-		super(buffer);
+	public pure nothrow @safe @nogc this(ubyte[] buffer=[], Options options=Options.init) {
+		super(buffer, options);
 	}
 
 	public override pure nothrow @safe void writeInt(int value) {
