@@ -168,14 +168,14 @@ class ClassicStream(Endian endianness) : Stream {
 
 }
 
-class NetworkStream(Endian endianness) : EndianStream!(endianness) {
+class NetworkStream(Endian endianness) : ClassicStream!(endianness) {
 
 	public pure nothrow @safe @nogc this(ubyte[] buffer=[]) {
 		super(buffer);
 	}
 
 	public override pure nothrow @safe void writeInt(int value) {
-		//TODO write signed varint
+		this.writeLength(value >= 0 ? value * 2 : value * -2 - 1);
 	}
 
 	protected override pure nothrow @safe void writeStringLength(size_t value) {
@@ -183,11 +183,18 @@ class NetworkStream(Endian endianness) : EndianStream!(endianness) {
 	}
 	
 	public override pure nothrow @safe void writeLength(size_t value) {
-		//TODO write unsigned varint
+		value &= 0x7FFFFFFF;
+		while(value > 0x7F) {
+			this.buffer ~= value & 0x7F | 0x80;
+			value >>= 7;
+		}
+		this.buffer ~= value & 0x7F;
 	}
 
 	public override pure nothrow @safe int readInt() {
-		//TODO read signed varint
+		uint ret = cast(uint)this.readLength();
+		if(ret & 1) return (-1 - cast(int)ret) / 2;
+		else return ret / 2;
 	}
 
 	protected override pure nothrow @safe size_t readStringLength() {
@@ -195,7 +202,13 @@ class NetworkStream(Endian endianness) : EndianStream!(endianness) {
 	}
 
 	public override pure nothrow @safe size_t readLength() {
-		//TODO read unsigned varint
+		size_t ret = 0;
+		ubyte next, limit;
+		do {
+			next = read!(ubyte, endianness)(this.buffer);
+			ret |= (next & 0x7F) << (limit++ * 7);
+		} while(limit < 5 && (next & 0x80));
+		return ret;
 	}
 
 }

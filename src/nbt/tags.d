@@ -530,6 +530,17 @@ unittest {
 	assert(tag.name == "");
 	assert(tag == [1, 2]);
 
+	stream = new NetworkStream!(Endian.bigEndian)();
+	new ByteArray(1, 2, 3).encode(stream);
+	assert(stream.buffer == [3, 1, 2, 3]);
+
+	stream.buffer.length = 0;
+	new IntArray(1, 200, -2).encode(stream);
+	assert(stream.buffer == [3, 2, 144, 3, 3]);
+	auto ia = new IntArray();
+	ia.decode(stream);
+	assert(ia == [1, 200, -2], ia.toString());
+
 }
 
 interface IList {
