@@ -54,16 +54,22 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 	}
 
 	public string location;
+	public T tag;
 
-	public this(string location) {
+	public this(string location, T tag=null) {
 		this.location = location;
+		this.tag = tag;
+	}
+
+	public this(T tag) {
+		this.tag = tag;
 	}
 	
 	public T load() {
 		
 		ubyte[] data = cast(ubyte[])std.file.read(this.location);
 
-		this.readHeader(data);
+		this.loadHeader(data);
 		
 		static if(c != Compression.none) {
 			UnCompress uc = new UnCompress(cast(HeaderFormat)c);
@@ -74,16 +80,18 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 		stream.buffer = data;
 		
 		static if(is(T : NamedTag)) {
-			return cast(T)stream.readNamedTag();
+			this.tag = cast(T)stream.readNamedTag();
 		} else {
-			return cast(T)stream.readTag();
+			this.tag = cast(T)stream.readTag();
 		}
+
+		return this.tag;
 		
 	}
 
-	protected void readHeader(ref ubyte[] data) {}
+	protected void loadHeader(ref ubyte[] data) {}
 
-	public void save(T tag) {
+	public T save() {
 
 		stream.buffer.length = 0;
 		static if(is(T : NamedTag)) {
@@ -99,13 +107,17 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 			data ~= cast(ubyte[])compress.flush();
 		}
 
-		this.writeHeader(data);
+		this.saveHeader(data);
 
 		std.file.write(this.location, data);
 
+		return this.tag;
+
 	}
 
-	protected void writeHeader(ref ubyte[] data) {}
+	protected void saveHeader(ref ubyte[] data) {}
+
+	alias tag this;
 
 }
 
@@ -115,11 +127,15 @@ class PocketLevelFormat : Format!(Named!Compound, ClassicStream!(Endian.littleEn
 
 	private uint v = 5;
 
-	public this(string location) {
-		super(location);
+	public this(string location, Named!Compound tag=null) {
+		super(location, tag);
 	}
 
-	protected override void readHeader(ref ubyte[] data) {
+	public this(Named!Compound tag) {
+		super(tag);
+	}
+
+	protected override void loadHeader(ref ubyte[] data) {
 		if(data.length >= 8) {
 			this.v = std.bitmanip.read!(uint, Endian.littleEndian)(data);
 			size_t size = std.bitmanip.read!(uint, Endian.littleEndian)(data);
@@ -127,8 +143,10 @@ class PocketLevelFormat : Format!(Named!Compound, ClassicStream!(Endian.littleEn
 		}
 	}
 
-	protected override void writeHeader(ref ubyte[] data) {
+	protected override void saveHeader(ref ubyte[] data) {
 		data = std.bitmanip.nativeToLittleEndian(this.v).dup ~ std.bitmanip.nativeToLittleEndian(cast(uint)data.length).dup ~ data;
 	}
+
+	alias tag this;
 
 }
