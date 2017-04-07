@@ -766,7 +766,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * is of the same type of T.
 	 * Returns: true if the value is found and is of the type T, false otherwise
 	 */
-	public pure nothrow @safe bool has(T:Tag)(string name) {
+	public pure nothrow @trusted bool has(T:Tag)(string name) {
 		auto index = this.search(name);
 		return index >= 0 && cast(T)this.value[index];
 	}
@@ -976,11 +976,14 @@ unittest {
 
 	compound["0"] = "string";
 	compound[] = new Named!Int("int", 44);
+	compound["c"] = new Compound();
 	assert(cast(String)compound["0"]);
 	assert(cast(Int)compound["int"]);
+	assert(compound.has!Compound("c"));
 	assert(compound.get!String("0") == "string");
 	assert(compound.get!Int("int") == 44);
-	assert(compound == new Compound(new Named!Int("int", 44), new Named!String("0", "string")));
+	assert(compound == new Compound(new Named!Int("int", 44), new Named!String("0", "string"), new Named!Compound("c")));
+	compound.remove("c");
 	assert(new Compound(new Named!Int("1", 1), new Named!Int("2", 2)) == new Compound(new Named!Int("2", 2), new Named!Int("1", 1)));
 	
 }
