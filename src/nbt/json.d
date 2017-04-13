@@ -18,6 +18,9 @@ import std.json;
 
 import nbt.tags;
 
+/**
+ * Converts a Tag into a JSONValue.
+ */
 JSONValue toJSON(Tag tag) {
 	return tag.toJSON();
 }
@@ -43,15 +46,11 @@ unittest {
  * 		instance of Double when the json is a floating point number, an
  * 		instance of Byte (with values 0 and 1) when the json is a boolean
  * 		and null when the json is null.
- * Example:
- * ---
- * assert(toNBT(parseJSON(`{"a":42}`)) == new Compound(new Named!Long("a", 42)));
- * ---
  */
 Tag toNBT(JSONValue json) {
 	final switch(json.type) {
 		case JSON_TYPE.OBJECT:
-			NamedTag[] nt;
+			Tag[] nt;
 			foreach(name, value; json.object) {
 				auto tag = toNBT(value);
 				if(tag !is null) nt ~= tag.rename(name);
@@ -87,6 +86,13 @@ unittest {
 	assert(toNBT(JSONValue(true)) == new Byte(1));
 	assert(toNBT(JSONValue([1, 2, 3])) == new ListOf!Long(1, 2, 3));
 	assert(toNBT(JSONValue(["a": [42]])) == new Compound(new Named!(ListOf!Long)("a", 42)));
-	//assert(toNBT(JSONValue(["a": [42]])) == new Compound(new Named!List("a", new Long(42))));
+	//assert(toNBT(JSONValue(["a": [42]])) == new Compound(new Named!List("a", new Long(42)))); //FIXME
+	assert(toNBT(JSONValue("test")) == new String("test"));
+	assert(toNBT(JSONValue(42)) == new Long(42));
+	assert(toNBT(JSONValue(42u)) == new Long(42));
+	assert(toNBT(JSONValue(.523)) == new Double(.523));
+	assert(toNBT(JSONValue(true)) == new Byte(1));
+	assert(toNBT(JSONValue(false)) == new Byte(0));
+	assert(toNBT(JSONValue(null)) is null);
 
 }

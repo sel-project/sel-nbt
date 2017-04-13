@@ -51,7 +51,9 @@ alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, 
  * functions (the endianness may vary from a Minecraft version
  * to another and the purpose of the tags in the game).
  */
-interface Tag {
+class Tag {
+
+	protected string n_name, n_formatted_name;
 
 	/**
 	 * Gets the tag's type.
@@ -65,6 +67,10 @@ interface Tag {
 	 */
 	public pure nothrow @property @safe @nogc const NBT_TYPE type();
 
+	public pure nothrow @property @safe @nogc const string name() {
+		return this.n_name;
+	}
+
 	/**
 	 * Creates a NamedTag maintaing the tag's properties.
 	 * Example:
@@ -76,7 +82,7 @@ interface Tag {
 	 * assert(named == 22);
 	 * ---
 	 */
-	public pure nothrow @safe NamedTag rename(string);
+	public pure nothrow @safe Tag rename(string);
 
 	/**
 	 * Encodes the tag's body.
@@ -96,61 +102,33 @@ interface Tag {
 	/**
 	 * Encodes the tag a human-readable string.
 	 */
-	public string toString();
+	public override abstract string toString();
 
 	protected string toValueString();
 	
 }
 
-interface NamedTag : Tag {
+template Named(T:Tag) {
 
-	public pure nothrow @property @safe @nogc string name();
-
-}
-
-template Named(T:Tag) if(is(T == class) && !is(T : NamedTag)) {
-
-	class Named : T, NamedTag {
-
-		private string n_name;
+	class Named : T {
 
 		public this(E...)(string name, E args) {
 			super(args);
 			this.n_name = name;
-		}
-
-		public final override pure nothrow @property @safe @nogc string name() {
-			return this.n_name;
-		}
-
-		public override bool opEquals(Object o) {
-			auto cmp = cast(typeof(this))o;
-			if(cmp !is null) {
-				return this.name == cmp.name && super.opEquals(o);
-			} else {
-				return super.opEquals(o);
-			}
-		}
-
-		public bool opEquals(O)(O o) if(!is(O : Object)) {
-			return super.opEquals(o);
-		}
-
-		public override string toString() {
-			return this.type.to!string ~ "(" ~ JSONValue(this.name).toString() ~ ": " ~ this.toValueString ~ ")";
+			this.n_formatted_name = "\"" ~ name ~ "\": ";
 		}
 
 	}
 
 }
 
-abstract class TagImpl(NBT_TYPE _type) : Tag {
+private abstract class TagImpl(NBT_TYPE _type) : Tag {
 
 	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
 		return _type;
 	}
 
-	public override abstract pure nothrow @safe NamedTag rename(string);
+	public override abstract pure nothrow @safe Tag rename(string);
 
 	public override abstract pure nothrow @safe void encode(Stream);
 
@@ -158,8 +136,9 @@ abstract class TagImpl(NBT_TYPE _type) : Tag {
 
 	public override abstract JSONValue toJSON();
 
+	// moving this function to Tag causes a linker error
 	public override string toString() {
-		return this.type.to!string ~ "(" ~ this.toValueString() ~ ")";
+		return this.type.to!string.capitalize ~ "(" ~ this.n_formatted_name ~ this.toValueString() ~ ")";
 	}
 
 	protected override abstract string toValueString();
@@ -183,7 +162,7 @@ class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
 		this.value = value;
 	}
 
-	public override pure nothrow @safe NamedTag rename(string name) {
+	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!(SimpleTag!(T, _type))(name, this.value);
 	}
 
@@ -206,7 +185,7 @@ class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
 
 	public override int opCmp(Object o) {
 		auto c = cast(typeof(this))o;
-		return c !is null && this.opCmp(c.value);
+		return c is null ? -1 : this.opCmp(c.value);
 	}
 
 	public int opCmp(T value) {
@@ -312,7 +291,7 @@ unittest {
 	assert(new Byte(1) == new Bool(true));
 	assert(new Named!Int("test", 12) == new Named!Int("test", 12));
 	assert(new Named!Long("test", 44) == 44);
-	assert(new Named!Double("test", 0) != new Named!Double("test!", 0));
+	assert(new Named!Double("test", 0) == new Named!Double("test!", 0));
 	assert(new Named!Float("test", 0) != 1);
 	assert(12f == new Float(12f));
 
@@ -323,10 +302,14 @@ unittest {
 	t /= 2;
 	assert(t == 33);
 	assert(t <= 33);
+	assert(t > new Int(0));
 	t = 100;
 	assert(t == 100);
 
-	assert(new Long(44).toString() == "LONG(44)"); // format may change
+	Tag tag = new Byte(1);
+	assert(tag > new Byte(0));
+
+	assert(new Long(44).toString() == "Long(44)"); // format may change
 
 	import std.system : Endian;
 	Stream stream = new ClassicStream!(Endian.bigEndian)();
@@ -359,10 +342,12 @@ class ArrayTag(T, NBT_TYPE _type) : TagImpl!_type {
 	public T[] value;
 
 	public pure nothrow @safe @nogc this(T[] value...) {
-		this.value = value;
+		if(value !is null) {
+			this.value = value;
+		}
 	}
 
-	public override abstract pure nothrow @safe NamedTag rename(string);
+	public override abstract pure nothrow @safe Tag rename(string);
 	
 	/**
 	 * Concatenates T, an array of T or a NBT array of T to the tag.
@@ -437,7 +422,7 @@ class NumericArrayTag(T, NBT_TYPE _type) : ArrayTag!(T, _type) if(isNumeric!T) {
 		super(value);
 	}
 	
-	public override pure nothrow @safe NamedTag rename(string name) {
+	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!(NumericArrayTag!(T, _type))(name, this.value);
 	}
 	
@@ -518,12 +503,18 @@ unittest {
 	assert(new IntArray(0, 1)[1] == 1);
 	assert(new IntArray(1, 1) == 1);
 
+	assert(new ByteArray(1, 2).toString() == "Byte_array([1, 2])");
+
 	auto list = new IntArray(0);
 	list[0] = 14;
 	assert(list[0] == 14);
 	list ~= 100;
 	list ~= [1, 2];
-	assert(list == [14, 100, 1, 2]);
+	list.remove(0);
+	assert(list == [100, 1, 2]);
+	assert(!list.empty);
+	assert(list.toJSON() == JSONValue([100, 1, 2]));
+	assert(cast(IntArray)list.rename("test") == [100, 1, 2]);
 
 	import std.system : Endian;
 	Stream stream = new ClassicStream!(Endian.bigEndian);
@@ -531,7 +522,7 @@ unittest {
 	assert(stream.buffer == [0, 0, 0, 3, 1, 2, 3]);
 
 	stream = new ClassicStream!(Endian.littleEndian)([NBT_TYPE.INT_ARRAY, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0]);
-	auto tag = cast(Named!IntArray)stream.readNamedTag();
+	auto tag = cast(IntArray)stream.readTag();
 	assert(tag !is null);
 	assert(tag.name == "");
 	assert(tag == [1, 2]);
@@ -626,7 +617,7 @@ class List : ListImpl!Tag {
 		super(tags);
 	}
 
-	public override pure nothrow @safe NamedTag rename(string name) {
+	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!List(name, this.value);
 	}
 
@@ -666,6 +657,28 @@ class List : ListImpl!Tag {
 	
 }
 
+unittest {
+
+	assert(!new List().valid);
+
+	auto list = new List(new Int(2), new Int(3));
+	assert(list.valid);
+	assert(list.childType == NBT_TYPE.INT);
+
+	import std.system : Endian;
+
+	auto stream = new ClassicStream!(Endian.littleEndian)();
+	list.encode(stream);
+	assert(stream.buffer == [NBT_TYPE.INT, 2, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]);
+
+	list.value.length = 0;
+	list.decode(stream);
+	assert(list.valid);
+	assert(list.length == 2);
+	assert(list == new List([new Int(2), new Int(3)]));
+
+}
+
 /// ditto
 class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
@@ -674,12 +687,8 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 	public static this() {
 		tagType = new T().type;
 	}
-
-	public pure nothrow @safe @nogc this() {
-		super([]);
-	}
 	
-	public pure nothrow @safe this(E)(E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
+	public pure nothrow @safe this(E=T)(E[] tags...) if(is(E == T) || is(E : typeof(T.value))) {
 		static if(is(E == T)) {
 			super(tags);
 		} else {
@@ -691,7 +700,7 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 		}
 	}
 
-	public override pure nothrow @safe NamedTag rename(string name) {
+	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!(ListOf!T)(name, this.value);
 	}
 	
@@ -703,7 +712,7 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 		// shouldn't be called
 	}
 	
-	public T opCast(T)() if(is(T == List)) {
+	public E opCast(E)() if(is(E == List)) {
 		return new List(cast(Tag[])this.value);
 	}
 	
@@ -713,10 +722,15 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
 unittest {
 	
-	auto list = new ListOf!Byte([new Byte(1), new Byte(2)]);
+	auto list = new ListOf!Byte();
 	assert(cast(List)list !is null);
+	list ~= new Byte(1);
+	list ~= new Byte(2);
 	assert(list.length == 2);
 	assert(list[0] == 1 && list[1] == 2);
+	assert(list.childType == NBT_TYPE.BYTE);
+	assert(list.rename("test").name == "test");
+
 	assert(new ListOf!Int(1, 2, 3).tags == [new Int(1), new Int(2), new Int(3)]);
 	
 }
@@ -732,17 +746,21 @@ unittest {
  */
 class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 
-	private NamedTag[] value;
+	private Tag[] value;
 	private string[] n_names; // to mantain order and avoid the use of associative array's opApply
 	
-	public pure nothrow @safe this(NamedTag[] tags...) {
-		this.value = tags;
-		foreach(tag ; tags) {
-			this.n_names ~= tag.name;
+	public pure nothrow @safe this(Tag[] tags...) {
+		if(tags !is null) {
+			foreach(tag ; tags) {
+				if(!this.n_names.canFind(tag.name)) {
+					this.value ~= tag;
+					this.n_names ~= tag.name;
+				}
+			}
 		}
 	}
 
-	public override pure nothrow @safe NamedTag rename(string name) {
+	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!Compound(name, this.value);
 	}
 
@@ -781,7 +799,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * }
 	 * ---
 	 */
-	public pure nothrow @safe NamedTag* opBinaryRight(string op : "in")(string name) {
+	public pure nothrow @safe Tag* opBinaryRight(string op : "in")(string name) {
 		auto index = this.search(name);
 		return index >= 0 ? &this.value[index] : null;
 	}
@@ -796,7 +814,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * assert(compound[] == compound.value.values);
 	 * ---
 	 */
-	public pure nothrow @safe NamedTag[] opIndex() {
+	public pure nothrow @safe Tag[] opIndex() {
 		return this.value;
 	}
 	
@@ -805,7 +823,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * Throws: RangeError if the given index is not in the array
 	 * Example:
 	 * ---
-	 * assert(new Compound("", ["test": new String("test")])[0] == "test");
+	 * assert(new Compound(new Named!String("0", "test"))["0"] == "test");
 	 * ---
 	 */
 	public pure nothrow @safe Tag opIndex(string name) {
@@ -839,9 +857,10 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * ---
 	 */
 	public pure nothrow @safe void opIndexAssign(T)(T value, string name) if(is(T : Tag) || isNumeric!T || is(T == bool) || is(T == string) || is(T == ubyte[]) || is(T == byte[]) || is(T == int[])) {
-		NamedTag tag;
+		Tag tag;
 		static if(is(T : Tag)) {
-			tag = value.rename(name); // convert to named tag
+			if(value.name != name) tag = value.rename(name);
+			else tag = value;
 		} else {
 			static if(is(T == bool) || is(T == byte) || is(T == ubyte)) tag = new Named!Byte(name, value);
 			else static if(is(T == short) || is(T == ushort)) tag = new Named!Short(name, value);
@@ -865,7 +884,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * assert(compound["test"] == "value");
 	 * ---
 	 */
-	public pure nothrow @safe void opIndexAssign(NamedTag tag) {
+	public pure nothrow @safe void opIndexAssign(Tag tag) {
 		auto i = this.search(tag.name);
 		if(i >= 0) {
 			this.value[i] = tag;
@@ -926,14 +945,14 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 
 	public override pure nothrow @safe void encode(Stream stream) {
 		foreach(tag ; this.value) {
-			stream.writeNamedTag(tag);
+			stream.writeTag(tag);
 		}
 		stream.writeByte(NBT_TYPE.END);
 	}
 
 	public override pure nothrow @safe void decode(Stream stream) {
-		NamedTag next;
-		while(this.length < stream.options.maxCompoundLength && (next = stream.readNamedTag()) !is null) {
+		Tag next;
+		while(this.length < stream.options.maxCompoundLength && (next = stream.readTag()) !is null) {
 			this[] = next;
 		}
 	}
@@ -951,11 +970,11 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 		return c !is null && this.cmpTags(c.value);
 	}
 	
-	public bool opEquals(NamedTag[] tags) {
+	public bool opEquals(Tag[] tags) {
 		return this.cmpTags(tags);
 	}
 
-	private bool cmpTags(NamedTag[] tags) {
+	private bool cmpTags(Tag[] tags) {
 		if(this.length != tags.length) return false;
 		foreach(i, tag; tags) {
 			auto ptr = tag.name in this;
@@ -982,8 +1001,36 @@ unittest {
 	assert(compound.has!Compound("c"));
 	assert(compound.get!String("0") == "string");
 	assert(compound.get!Int("int") == 44);
+
+	auto s = "0" in compound;
+	assert(s && cast(String)*s);
+	assert(cast(String)*s == "string");
+	assert(*s == new String("string"));
+
 	assert(compound == new Compound(new Named!Int("int", 44), new Named!String("0", "string"), new Named!Compound("c")));
 	compound.remove("c");
-	assert(new Compound(new Named!Int("1", 1), new Named!Int("2", 2)) == new Compound(new Named!Int("2", 2), new Named!Int("1", 1)));
+	assert(compound.length == 2);
+	assert(compound.names == ["0", "int"]);
+	assert(compound.toString() == "Compound([String(\"0\": string), Int(\"int\": 44)])");
+	assert(!compound.empty);
+	assert(compound.dup == [new Named!Int("int", 44), new Named!String("0", "string")]);
+	compound.remove("int");
+	compound.remove("0");
+	assert(compound.empty);
+
+	compound["test"] = new Named!String("test", "test");
+	auto test = "Test" in compound;
+	assert(test is null);
+	assert(!compound.has("Test"));
+	compound["test"] = new String("test");
+	assert(compound[] == [new Named!String("test", "test")]);
+
+	assert(new Compound(new Named!Int("1", 1), new Named!Int("2", 2)) == [new Named!Int("2", 2), new Named!Int("1", 1)]);
+
+	import std.system : Endian;
+	auto stream = new ClassicStream!(Endian.littleEndian)([NBT_TYPE.COMPOUND, 0]);
+	compound = cast(Compound)stream.readTag();
+	assert(compound.name == "");
+	assert(compound.empty);
 	
 }

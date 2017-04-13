@@ -45,19 +45,15 @@ class Stream {
 		this.options = options;
 	}
 
+	public pure nothrow @safe void writeNamelessTag(Tag tag) {
+		this.writeByte(tag.type);
+		tag.encode(this);
+	}
+
 	public pure nothrow @safe void writeTag(Tag tag) {
 		this.writeByte(tag.type);
+		this.writeString(tag.name);
 		tag.encode(this);
-	}
-
-	public pure nothrow @safe void writeNamedTag(string name, Tag tag) {
-		this.writeByte(tag.type);
-		this.writeString(name);
-		tag.encode(this);
-	}
-
-	public pure nothrow @safe void writeNamedTag(NamedTag tag) {
-		this.writeNamedTag(tag.name, tag);
 	}
 
 	public abstract pure nothrow @safe void writeByte(byte value);
@@ -76,7 +72,7 @@ class Stream {
 
 	public abstract pure nothrow @safe void writeLength(size_t value);
 
-	public pure nothrow @safe Tag readTag() {
+	public pure nothrow @safe Tag readNamelessTag() {
 		switch(this.readByte()) {
 			foreach(i, T; Tags) {
 				static if(is(T : Tag)) {
@@ -87,7 +83,7 @@ class Stream {
 		}
 	}
 
-	public pure nothrow @safe NamedTag readNamedTag() {
+	public pure nothrow @safe Tag readTag() {
 		switch(this.readByte()) {
 			foreach(i, T; Tags) {
 				static if(is(T : Tag)) {

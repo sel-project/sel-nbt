@@ -6,5 +6,7 @@
 *.dproj
 *.sln
 *.userprefs
+*.lst
+test.dat
 src/main.d
 dub.selections.json

@@ -61,8 +61,8 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 		this.tag = tag;
 	}
 
-	public this(T tag) {
-		this.tag = tag;
+	public this(T tag, string location="") {
+		this(location, tag);
 	}
 	
 	public T load() {
@@ -78,12 +78,9 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 		}
 		
 		stream.buffer = data;
-		
-		static if(is(T : NamedTag)) {
-			this.tag = cast(T)stream.readNamedTag();
-		} else {
-			this.tag = cast(T)stream.readTag();
-		}
+
+		//TODO nameless tag
+		this.tag = cast(T)stream.readTag();
 
 		return this.tag;
 		
@@ -94,11 +91,8 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 	public T save() {
 
 		stream.buffer.length = 0;
-		static if(is(T : NamedTag)) {
-			stream.writeNamedTag(tag);
-		} else {
-			stream.writeTag(tag);
-		}
+		//TODO nameless tag
+		stream.writeTag(this.tag);
 		ubyte[] data = stream.buffer;
 
 		static if(c != Compression.none) {
@@ -121,18 +115,18 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 
 }
 
-alias MinecraftLevelFormat = Format!(Named!Compound, ClassicStream!(Endian.bigEndian), Compression.gzip);
+alias MinecraftLevelFormat = Format!(Compound, ClassicStream!(Endian.bigEndian), Compression.gzip);
 
-class PocketLevelFormat : Format!(Named!Compound, ClassicStream!(Endian.littleEndian), Compression.none) {
+class PocketLevelFormat : Format!(Compound, ClassicStream!(Endian.littleEndian), Compression.none) {
 
 	private uint v = 5;
 
-	public this(string location, Named!Compound tag=null) {
+	public this(string location, Compound tag=null) {
 		super(location, tag);
 	}
 
-	public this(Named!Compound tag) {
-		super(tag);
+	public this(Compound tag, string location="") {
+		super(tag, location);
 	}
 
 	protected override void loadHeader(ref ubyte[] data) {
@@ -148,5 +142,32 @@ class PocketLevelFormat : Format!(Named!Compound, ClassicStream!(Endian.littleEn
 	}
 
 	alias tag this;
+
+}
+
+unittest {
+
+	auto minecraft = new MinecraftLevelFormat("test/minecraft.dat");
+	minecraft.load();
+	auto data = minecraft.get!Compound("Data");
+	assert(data !is null);
+	assert(data.has!String("LevelName") && data.get!String("LevelName") == "New World");
+	assert(data.has!Int("version") && data.get!Int("version") == 19133);
+
+	minecraft = new MinecraftLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
+	minecraft.save();
+	auto u = new UnCompress(HeaderFormat.gzip);
+	auto b = cast(ubyte[])u.uncompress(std.file.read("test.dat"));
+	b ~= cast(ubyte[])u.flush();
+	assert(b == [10, 0, 0, 3, 0, 4, 84, 101, 115, 116, 0, 0, 0, 42, 0]);
+
+	auto pocket = new PocketLevelFormat("test/pocket.dat");
+	pocket.load();
+	assert(pocket.has!String("LevelName") && pocket.get!String("LevelName") == "AAAAAAAAAA");
+	assert(pocket.has!Int("Difficulty") && pocket.get!Int("Difficulty") == 2);
+
+	pocket = new PocketLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
+	pocket.save();
+	assert(cast(ubyte[])std.file.read("test.dat") == [5, 0, 0, 0, 15, 0, 0, 0, 10, 0, 0, 3, 4, 0, 84, 101, 115, 116, 42, 0, 0, 0, 0]);
 
 }
