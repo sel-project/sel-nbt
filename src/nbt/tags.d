@@ -553,6 +553,10 @@ interface IList {
 class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 
 	public pure nothrow @safe @nogc this(T[] value) {
+		foreach(ref v ; value) {
+			v.n_name = "";
+			v.n_formatted_name = "";
+		}
 		super(value);
 	}
 
@@ -564,7 +568,7 @@ class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 		} else {
 			Tag[] ret = new Tag[this.value.length];
 			foreach(i, v; this.value) {
-				ret[i] = cast(Tag)v;
+				ret[i] = v;
 			}
 			return ret;
 		}
@@ -587,6 +591,22 @@ class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 	public override bool opEquals(Object o) {
 		auto l = cast(IList)o;
 		return l !is null && this.tags == l.tags;
+	}
+
+	public E opCast(E)() if(is(E == List)) {
+		return new List(this.tags);
+	}
+
+	public E opCast(E)() if(is(E == class) && is(E.Type) && is(typeof(E.tagType))) {
+		if(this.childType == E.tagType) {
+			E.Type[] ret;
+			foreach(v ; this.value) {
+				ret ~= cast(E.Type)v;
+			}
+			return new E(ret);
+		} else {
+			return null;
+		}
 	}
 
 	public override JSONValue toJSON() {
@@ -661,9 +681,12 @@ unittest {
 
 	assert(!new List().valid);
 
-	auto list = new List(new Int(2), new Int(3));
+	auto list = new List(new Int(2), new Named!Int("3", 3));
 	assert(list.valid);
 	assert(list.childType == NBT_TYPE.INT);
+	assert(list[1].name == "");
+	assert(cast(ListOf!Byte)list is null);
+	assert(cast(ListOf!Int)list !is null);
 
 	import std.system : Endian;
 
@@ -681,6 +704,8 @@ unittest {
 
 /// ditto
 class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
+
+	public alias Type = T;
 
 	public static immutable ubyte tagType;
 
@@ -710,10 +735,6 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
 	public override pure nothrow @safe void decode(Stream stream) {
 		// shouldn't be called
-	}
-	
-	public E opCast(E)() if(is(E == List)) {
-		return new List(cast(Tag[])this.value);
 	}
 	
 	alias value this;
@@ -786,7 +807,13 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 */
 	public pure nothrow @trusted bool has(T:Tag)(string name) {
 		auto index = this.search(name);
-		return index >= 0 && cast(T)this.value[index];
+		if(index < 0) return false;
+		static if(is(T : IList) && !is(T == List)) {
+			// special cast
+			return cast(T)cast(List)this.value[index] !is null;
+		} else {
+			return cast(T)this.value[index] !is null;
+		}
 	}
 	
 	/**
@@ -841,7 +868,12 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * ---
 	 */
 	public pure nothrow @safe T get(T:Tag)(string name) {
-		return cast(T)this[name];
+		static if(is(T : IList) && !is(T == List)) {
+			// spcial cast
+			return cast(T)cast(List)this[name];
+		} else {
+			return cast(T)this[name];
+		}
 	}
 	
 	/**
@@ -1028,9 +1060,19 @@ unittest {
 	assert(new Compound(new Named!Int("1", 1), new Named!Int("2", 2)) == [new Named!Int("2", 2), new Named!Int("1", 1)]);
 
 	import std.system : Endian;
-	auto stream = new ClassicStream!(Endian.littleEndian)([NBT_TYPE.COMPOUND, 0]);
+
+	Stream stream = new ClassicStream!(Endian.littleEndian)([NBT_TYPE.COMPOUND, 0]);
 	compound = cast(Compound)stream.readTag();
 	assert(compound.name == "");
 	assert(compound.empty);
-	
+
+	stream = new NetworkStream!(Endian.littleEndian)([NBT_TYPE.COMPOUND, 0, NBT_TYPE.LIST, 1, 'a', NBT_TYPE.INT, 2, 1, 2, NBT_TYPE.END]);
+	compound = cast(Compound)stream.readTag();
+	assert(compound);
+	assert(compound.has!List("a"));
+	assert(compound.has!(ListOf!Int)("a"));
+	//assert(!compound.has!(ListOf!(ListOf!Int))("a"));
+	auto list = compound.get!(ListOf!Int)("a");
+	assert(list == new List([new Int(-1), new Int(1)]));
+
 }

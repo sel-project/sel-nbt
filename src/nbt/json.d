@@ -22,7 +22,11 @@ import nbt.tags;
  * Converts a Tag into a JSONValue.
  */
 JSONValue toJSON(Tag tag) {
-	return tag.toJSON();
+	if(tag is null) {
+		return JSONValue(null);
+	} else {
+		return tag.toJSON();
+	}
 }
 
 ///
@@ -34,6 +38,7 @@ unittest {
 	
 	assert(toJSON(new Int(12)) == JSONValue(12));
 	assert(toJSON(new ListOf!Int(9, 10)) == JSONValue([9, 10]));
+	assert(toJSON(null).type == JSON_TYPE.NULL);
 	
 }
 
