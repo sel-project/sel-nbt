@@ -322,6 +322,13 @@ unittest {
 	auto i = new Int();
 	i.decode(stream);
 	assert(i == 16778496);
+
+	stream.buffer = [1, 1];
+	auto b = stream.readNamelessTag();
+	assert(cast(Byte)b && cast(Byte)b == 1);
+
+	stream.writeNamelessTag(new Short(12));
+	assert(stream.buffer == [2, 0, 12]);
 	
 }
 
