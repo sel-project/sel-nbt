@@ -82,29 +82,29 @@ class Tag {
 	 * assert(named == 22);
 	 * ---
 	 */
-	public pure nothrow @safe Tag rename(string);
+	public abstract pure nothrow @safe Tag rename(string);
 
 	/**
 	 * Encodes the tag's body.
 	 */
-	public pure nothrow @safe void encode(Stream);
+	public abstract pure nothrow @safe void encode(Stream);
 
 	/**
 	 * Decodes the tag's body.
 	 */
-	public pure nothrow @safe void decode(Stream);
+	public abstract pure nothrow @safe void decode(Stream);
 	
 	/**
 	 * Encodes the tag's value as json.
 	 */
-	public JSONValue toJSON();
+	public abstract JSONValue toJSON();
 
 	/**
 	 * Encodes the tag a human-readable string.
 	 */
 	public override abstract string toString();
 
-	protected string toValueString();
+	protected abstract string toValueString();
 	
 }
 
