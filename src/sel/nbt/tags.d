@@ -12,7 +12,7 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-module nbt.tags;
+module sel.nbt.tags;
 
 import std.algorithm : canFind;
 import std.conv : to;
@@ -21,7 +21,7 @@ import std.string : capitalize;
 import std.traits : isAbstractClass, isNumeric;
 import std.typetuple : TypeTuple;
 
-import nbt.stream;
+import sel.nbt.stream;
 
 /**
  * NBT's ids, as unsigned bytes, used by for client-server

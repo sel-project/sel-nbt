@@ -12,11 +12,11 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-module nbt.json;
+module sel.nbt.json;
 
 import std.json;
 
-import nbt.tags;
+import sel.nbt.tags;
 
 /**
  * Converts a Tag into a JSONValue.

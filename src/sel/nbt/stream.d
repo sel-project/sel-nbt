@@ -1,10 +1,10 @@
-﻿module nbt.stream;
+﻿module sel.nbt.stream;
 
 import std.bitmanip : littleEndianToNative, bigEndianToNative, nativeToLittleEndian, nativeToBigEndian;
 import std.string : capitalize, toUpper;
 import std.system : Endian;
 
-import nbt.tags;
+import sel.nbt.tags;
 
 private pure nothrow @safe ubyte[] write(T, Endian endianness)(T value) {
 	mixin("return nativeTo" ~ endianString(endianness)[0..1].toUpper ~ endianString(endianness)[1..$] ~ "!T(value).dup;");

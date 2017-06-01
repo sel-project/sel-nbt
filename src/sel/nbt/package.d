@@ -12,8 +12,8 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-module nbt;
+module sel.nbt;
 
-public import nbt.json : toJSON, toNBT;
-public import nbt.stream : Stream, ClassicStream, NetworkStream;
-public import nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, ByteArray, IntArray, List, ListOf, Compound;
+public import sel.nbt.json : toJSON, toNBT;
+public import sel.nbt.stream : Stream, ClassicStream, NetworkStream;
+public import sel.nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, ByteArray, IntArray, List, ListOf, Compound;

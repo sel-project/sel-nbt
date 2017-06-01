@@ -12,7 +12,7 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-module nbt.file;
+module sel.nbt.file;
 
 // test
 import std.conv;
@@ -25,8 +25,8 @@ import std.traits : isAbstractClass;
 import std.typetuple : TypeTuple;
 import std.zlib;
 
-import nbt.stream;
-import nbt.tags;
+import sel.nbt.stream;
+import sel.nbt.tags;
 
 enum Compression {
 

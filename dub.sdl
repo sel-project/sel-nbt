@@ -1,0 +1,4 @@
+name "sel-nbt"
+description "NBT library for Minecraft and Minecraft: Pocket Edition"
+authors "sel-project"
+license "LGPL-3"

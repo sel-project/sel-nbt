@@ -12,13 +12,13 @@
  * See the GNU Lesser General Public License for more details.
  * 
  */
-module nbt.parser;
+module sel.nbt.parser;
 
 import std.algorithm : canFind;
 import std.conv : to, ConvOverflowException;
 import std.string;
 
-import nbt.tags;
+import sel.nbt.tags;
 
 /**
  * Parses a string into a tag.
