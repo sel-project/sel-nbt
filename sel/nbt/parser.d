@@ -57,6 +57,9 @@ unittest {
 	assert(parse(".44f") == new Float(.44f));
 	assert(parse("12.1.1.1") == new Double(12.1));
 	assert(parse(".00D") == new Double(0));
+
+	// compound
+	assert(parse(`{EntityData:{id:"minecraft:creeper"}}`) == new Compound(new Named!Compound("EntityData", new Named!String("id", "minecraft:creeper"))));
 	
 }
 

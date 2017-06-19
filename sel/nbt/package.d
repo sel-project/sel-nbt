@@ -16,4 +16,4 @@ module sel.nbt;
 
 public import sel.nbt.json : toJSON, toNBT;
 public import sel.nbt.stream : Stream, ClassicStream, NetworkStream;
-public import sel.nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, ByteArray, IntArray, List, ListOf, Compound;
+public import sel.nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, String, ByteArray, IntArray, List, ListOf, Compound;
