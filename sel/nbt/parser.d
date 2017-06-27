@@ -60,6 +60,7 @@ unittest {
 
 	// compound
 	assert(parse(`{EntityData:{id:"minecraft:creeper"}}`) == new Compound(new Named!Compound("EntityData", new Named!String("id", "minecraft:creeper"))));
+	assert(parse(`{Potion:"minecraft:long_strength"}`) == new Compound(new Named!String("Potion", "minecraft:long_strength")));
 	
 }
 

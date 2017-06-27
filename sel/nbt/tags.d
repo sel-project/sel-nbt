@@ -17,7 +17,7 @@ module sel.nbt.tags;
 import std.algorithm : canFind;
 import std.conv : to;
 import std.json : JSONValue;
-import std.string : capitalize;
+import std.string : capitalize, join;
 import std.traits : isAbstractClass, isNumeric;
 import std.typetuple : TypeTuple;
 
@@ -46,6 +46,11 @@ enum NBT_TYPE : ubyte {
 
 alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, String, List, Compound, IntArray);
 
+private string format(string str) {
+	import std.string : replace;
+	return "\"" ~ str.replace("\"", "\\\"") ~ "\"";
+}
+
 /**
  * Base class for every NBT that contains id and encoding
  * functions (the endianness may vary from a Minecraft version
@@ -53,7 +58,8 @@ alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, 
  */
 class Tag {
 
-	protected string n_name, n_formatted_name;
+	protected bool _named;
+	protected string _name;
 
 	/**
 	 * Gets the tag's type.
@@ -67,8 +73,18 @@ class Tag {
 	 */
 	public pure nothrow @property @safe @nogc const NBT_TYPE type();
 
+	/**
+	 * Indicates whether the tag has a name.
+	 */
+	public final pure nothrow @property @safe @nogc bool named() {
+		return this._named;
+	}
+
+	/**
+	 * Gets the tag's name, if there's one.
+	 */
 	public pure nothrow @property @safe @nogc const string name() {
-		return this.n_name;
+		return this._name;
 	}
 
 	/**
@@ -103,45 +119,32 @@ class Tag {
 	 * Encodes the tag a human-readable string.
 	 */
 	public override abstract string toString();
-
-	protected abstract string toValueString();
 	
 }
 
+/**
+ * Creates a named tag. The first argument of the constructor becomes a string
+ * (the name) and rest doesn't change.
+ * Example:
+ * ---
+ * auto tag = new Named!Int("name", 12);
+ * assert(tag.named);
+ * assert(tag.name == "name");
+ * assert(tag.value == 12);
+ * assert(tag == new Int(12));
+ * ---
+ */
 template Named(T:Tag) {
 
 	class Named : T {
 
 		public this(E...)(string name, E args) {
 			super(args);
-			this.n_name = name;
-			this.n_formatted_name = "\"" ~ name ~ "\": ";
+			this._named = true;
+			this._name = name;
 		}
 
 	}
-
-}
-
-private abstract class TagImpl(NBT_TYPE _type) : Tag {
-
-	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
-		return _type;
-	}
-
-	public override abstract pure nothrow @safe Tag rename(string);
-
-	public override abstract pure nothrow @safe void encode(Stream);
-
-	public override abstract pure nothrow @safe void decode(Stream);
-
-	public override abstract JSONValue toJSON();
-
-	// moving this function to Tag causes a linker error
-	public override string toString() {
-		return this.type.to!string.capitalize ~ "(" ~ this.n_formatted_name ~ this.toValueString() ~ ")";
-	}
-
-	protected override abstract string toValueString();
 
 }
 
@@ -154,7 +157,7 @@ private abstract class TagImpl(NBT_TYPE _type) : Tag {
  * assert(new SimpleTag!(char, 12)('c') == 'c');
  * ---
  */
-class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
+class SimpleTag(T, NBT_TYPE _type) : Tag {
 	
 	public T value;
 
@@ -162,16 +165,20 @@ class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
 		this.value = value;
 	}
 
+	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
+		return _type;
+	}
+
 	public override pure nothrow @safe Tag rename(string name) {
 		return new Named!(SimpleTag!(T, _type))(name, this.value);
 	}
 
 	public override pure nothrow @safe void encode(Stream stream) {
-		mixin("stream.write" ~ capitalize(T.stringof) ~ "(this.value);");
+		mixin("stream.write" ~ capitalize(T.stringof))(this.value);
 	}
 
 	public override pure nothrow @safe void decode(Stream stream) {
-		mixin("this.value = stream.read" ~ capitalize(T.stringof) ~ "();");
+		this.value = mixin("stream.read" ~ capitalize(T.stringof))();
 	}
 	
 	public override bool opEquals(Object o) {
@@ -196,8 +203,12 @@ class SimpleTag(T, NBT_TYPE _type) : TagImpl!_type {
 		return JSONValue(this.value);
 	}
 	
-	public override string toValueString() {
-		return to!string(this.value);
+	public override string toString() {
+		static if(is(T : string)) {
+			return format(this.value);
+		} else {
+			return to!string(this.value);
+		}
 	}
 	
 	alias value this;
@@ -289,6 +300,8 @@ alias String = SimpleTag!(string, NBT_TYPE.STRING);
 unittest {
 	
 	assert(new Byte(1) == new Bool(true));
+	assert(new Named!Int("", 1).named);
+	assert(new Named!Int("", 1).name == "");
 	assert(new Named!Int("test", 12) == new Named!Int("test", 12));
 	assert(new Named!Long("test", 44) == 44);
 	assert(new Named!Double("test", 0) == new Named!Double("test!", 0));
@@ -309,7 +322,7 @@ unittest {
 	Tag tag = new Byte(1);
 	assert(tag > new Byte(0));
 
-	assert(new Long(44).toString() == "Long(44)"); // format may change
+	assert(new Long(44).toString() == "44"); // format may change
 
 	import std.system : Endian;
 	Stream stream = new ClassicStream!(Endian.bigEndian)();
@@ -338,13 +351,13 @@ unittest {
  * ---
  * assert(new ByteArray([2, 3, 4]).length == new IntArray([9, 0, 12]).length);
  * 
- * auto b = new ByteArray("test");
+ * auto b = new ByteArray();
  * assert(b.empty);
  * b ~= 14;
  * assert(b.length == 1 && b[0] == 14);
  * ---
  */
-class ArrayTag(T, NBT_TYPE _type) : TagImpl!_type {
+class ArrayTag(T, NBT_TYPE _type) : Tag {
 
 	public T[] value;
 
@@ -352,6 +365,10 @@ class ArrayTag(T, NBT_TYPE _type) : TagImpl!_type {
 		if(value !is null) {
 			this.value = value;
 		}
+	}
+
+	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
+		return _type;
 	}
 
 	public override abstract pure nothrow @safe Tag rename(string);
@@ -416,8 +433,12 @@ class ArrayTag(T, NBT_TYPE _type) : TagImpl!_type {
 
 	public override abstract JSONValue toJSON();
 	
-	public override string toValueString() {
-		return to!string(this.value);
+	public override string toString() {
+		string[] ret;
+		foreach(tag ; this.value) {
+			ret ~= tag.to!string;
+		}
+		return "[" ~ ret.join(",") ~ "]";
 	}
 	
 }
@@ -510,7 +531,7 @@ unittest {
 	assert(new IntArray(0, 1)[1] == 1);
 	assert(new IntArray(1, 1) == 1);
 
-	assert(new ByteArray(1, 2).toString() == "Byte_array([1, 2])");
+	assert(new ByteArray(1, 2, 3).toString() == "[1,2,3]");
 
 	auto list = new IntArray(0);
 	list[0] = 14;
@@ -561,8 +582,8 @@ class ListImpl(T:Tag) : ArrayTag!(T, NBT_TYPE.LIST), IList {
 
 	public pure nothrow @safe @nogc this(T[] value) {
 		foreach(ref v ; value) {
-			v.n_name = "";
-			v.n_formatted_name = "";
+			v._named = false;
+			v._name = "";
 		}
 		super(value);
 	}
@@ -772,7 +793,7 @@ unittest {
  * compound["byte"] = new Byte(18);
  * ---
  */
-class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
+class Compound : Tag {
 
 	private Tag[] value;
 	private string[] n_names; // to mantain order and avoid the use of associative array's opApply
@@ -780,12 +801,17 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	public pure nothrow @safe this(Tag[] tags...) {
 		if(tags !is null) {
 			foreach(tag ; tags) {
+				assert(tag.named);
 				if(!this.n_names.canFind(tag.name)) {
 					this.value ~= tag;
 					this.n_names ~= tag.name;
 				}
 			}
 		}
+	}
+
+	public override pure nothrow @property @safe @nogc const NBT_TYPE type() {
+		return NBT_TYPE.COMPOUND;
 	}
 
 	public override pure nothrow @safe Tag rename(string name) {
@@ -898,8 +924,9 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	public pure nothrow @safe void opIndexAssign(T)(T value, string name) if(is(T : Tag) || isNumeric!T || is(T == bool) || is(T == string) || is(T == ubyte[]) || is(T == byte[]) || is(T == int[])) {
 		Tag tag;
 		static if(is(T : Tag)) {
-			if(value.name != name) tag = value.rename(name);
-			else tag = value;
+			value._named = true;
+			value._name = name;
+			tag = value;
 		} else {
 			static if(is(T == bool) || is(T == byte) || is(T == ubyte)) tag = new Named!Byte(name, value);
 			else static if(is(T == short) || is(T == ushort)) tag = new Named!Short(name, value);
@@ -924,6 +951,7 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 	 * ---
 	 */
 	public pure nothrow @safe void opIndexAssign(Tag tag) {
+		assert(tag.named);
 		auto i = this.search(tag.name);
 		if(i >= 0) {
 			this.value[i] = tag;
@@ -1022,8 +1050,12 @@ class Compound : TagImpl!(NBT_TYPE.COMPOUND) {
 		return true;
 	}
 	
-	public override string toValueString() {
-		return to!string(this.value);
+	public override string toString() {
+		string[] ret;
+		foreach(tag ; this.value) {
+			ret ~= format(tag.name) ~ ":" ~ tag.toString();
+		}
+		return "{" ~ ret.join(",") ~ "}";
 	}
 	
 }
@@ -1041,6 +1073,9 @@ unittest {
 	assert(compound.get!String("0") == "string");
 	assert(compound.get!Int("int") == 44);
 
+	Tag tag = new Compound(new Named!String("a", "b"));
+	assert(tag == cast(Tag)new Compound(new Named!String("a", "b")));
+
 	auto s = "0" in compound;
 	assert(s && cast(String)*s);
 	assert(cast(String)*s == "string");
@@ -1050,7 +1085,7 @@ unittest {
 	compound.remove("c");
 	assert(compound.length == 2);
 	assert(compound.names == ["0", "int"]);
-	assert(compound.toString() == "Compound([String(\"0\": string), Int(\"int\": 44)])");
+	assert(compound.toString() == "{\"0\":\"string\",\"int\":44}", compound.toString());
 	assert(!compound.empty);
 	assert(compound.dup == [new Named!Int("int", 44), new Named!String("0", "string")]);
 	compound.remove("int");
