@@ -891,22 +891,30 @@ class Compound : Tag {
 	}
 	
 	/**
-	 * Gets the element at the given index, casting it to T.
-	 * Returns: the named tag of type T or null if the conversion has failed
+	 * Gets the element at the given index, if exists and can be casted to T.
+	 * Otherwise evaluates and returns defaultValue.
+	 * Returns: the named tag of type T or defaultValue if the conversion fails
 	 * Example:
 	 * ---
 	 * auto compound = new Compound("", ["test": new String("value")]);
 	 * assert(is(typeof(compound["test"]) == NamedTag));
-	 * assert(is(typeof(compound.get!String("test")) == String));
+	 * assert(is(typeof(compound.get!String("test", null)) == String));
+	 * assert(compound.get!String("failed", new String("failed")) == new String("failed"));
 	 * ---
 	 */
-	public pure nothrow @safe T get(T:Tag)(string name) {
-		static if(is(T : IList) && !is(T == List)) {
-			// spcial cast
-			return cast(T)cast(List)this[name];
-		} else {
-			return cast(T)this[name];
+	public pure @safe T get(T:Tag)(string name, lazy T defaultValue) {
+		T ret = null;
+		immutable index = this.search(name);
+		if(index >= 0) {
+			static if(is(T : IList) && !is(T == List)) {
+				// special cast
+				ret = cast(T)cast(List)this.value[index];
+			} else {
+				ret = cast(T)this.value[index];
+			}
 		}
+		if(ret !is null) return ret;
+		else return defaultValue;
 	}
 	
 	/**
@@ -1070,8 +1078,9 @@ unittest {
 	assert(cast(String)compound["0"]);
 	assert(cast(Int)compound["int"]);
 	assert(compound.has!Compound("c"));
-	assert(compound.get!String("0") == "string");
-	assert(compound.get!Int("int") == 44);
+	assert(compound.get!String("0", null) == "string");
+	assert(compound.get!Int("int", null) == 44);
+	assert(compound.get!Long("miss", new Long(44)) == new Long(44));
 
 	Tag tag = new Compound(new Named!String("a", "b"));
 	assert(tag == cast(Tag)new Compound(new Named!String("a", "b")));
@@ -1114,7 +1123,7 @@ unittest {
 	assert(compound.has!List("a"));
 	assert(compound.has!(ListOf!Int)("a"));
 	//assert(!compound.has!(ListOf!(ListOf!Int))("a"));
-	auto list = compound.get!(ListOf!Int)("a");
+	auto list = compound.get!(ListOf!Int)("a", null);
 	assert(list == new List([new Int(-1), new Int(1)]));
 
 }

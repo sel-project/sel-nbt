@@ -149,10 +149,10 @@ unittest {
 
 	auto minecraft = new MinecraftLevelFormat("test/minecraft.dat");
 	minecraft.load();
-	auto data = minecraft.get!Compound("Data");
+	auto data = minecraft.get!Compound("Data", null);
 	assert(data !is null);
-	assert(data.has!String("LevelName") && data.get!String("LevelName") == "New World");
-	assert(data.has!Int("version") && data.get!Int("version") == 19133);
+	assert(data.has!String("LevelName") && data.get!String("LevelName", null) == "New World");
+	assert(data.has!Int("version") && data.get!Int("version", null) == 19133);
 
 	minecraft = new MinecraftLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
 	minecraft.save();
@@ -163,8 +163,8 @@ unittest {
 
 	auto pocket = new PocketLevelFormat("test/pocket.dat");
 	pocket.load();
-	assert(pocket.has!String("LevelName") && pocket.get!String("LevelName") == "AAAAAAAAAA");
-	assert(pocket.has!Int("Difficulty") && pocket.get!Int("Difficulty") == 2);
+	assert(pocket.has!String("LevelName") && pocket.get!String("LevelName", null) == "AAAAAAAAAA");
+	assert(pocket.has!Int("Difficulty") && pocket.get!Int("Difficulty", null) == 2);
 
 	pocket = new PocketLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
 	pocket.save();
