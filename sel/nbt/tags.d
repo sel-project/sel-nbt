@@ -900,6 +900,7 @@ class Compound : Tag {
 	 * assert(is(typeof(compound["test"]) == NamedTag));
 	 * assert(is(typeof(compound.get!String("test", null)) == String));
 	 * assert(compound.get!String("failed", new String("failed")) == new String("failed"));
+	 * assert(compound.get!String("?", "string") == new String("string"));
 	 * ---
 	 */
 	public pure @safe T get(T:Tag)(string name, lazy T defaultValue) {
@@ -915,6 +916,11 @@ class Compound : Tag {
 		}
 		if(ret !is null) return ret;
 		else return defaultValue;
+	}
+
+	/// ditto
+	public pure @safe T get(T:Tag, E)(string name, E defaultValue) if(!is(T == E) && __traits(compiles, new T(defaultValue))) {
+		return this.get!T(name, new T(defaultValue));
 	}
 	
 	/**
@@ -1081,6 +1087,7 @@ unittest {
 	assert(compound.get!String("0", null) == "string");
 	assert(compound.get!Int("int", null) == 44);
 	assert(compound.get!Long("miss", new Long(44)) == new Long(44));
+	assert(compound.get!Short("miss", short(12)) == new Short(12));
 
 	Tag tag = new Compound(new Named!String("a", "b"));
 	assert(tag == cast(Tag)new Compound(new Named!String("a", "b")));
