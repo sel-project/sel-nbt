@@ -896,7 +896,7 @@ class Compound : Tag {
 	 * Returns: the named tag of type T or defaultValue if the conversion fails
 	 * Example:
 	 * ---
-	 * auto compound = new Compound("", ["test": new String("value")]);
+	 * auto compound = new Compound(new Named!String("test", "value"));
 	 * assert(is(typeof(compound["test"]) == NamedTag));
 	 * assert(is(typeof(compound.get!String("test", null)) == String));
 	 * assert(compound.get!String("failed", new String("failed")) == new String("failed"));
@@ -921,6 +921,32 @@ class Compound : Tag {
 	/// ditto
 	public pure @safe T get(T:Tag, E)(string name, E defaultValue) if(!is(T == E) && __traits(compiles, new T(defaultValue))) {
 		return this.get!T(name, new T(defaultValue));
+	}
+
+	/**
+	 * Gets the tag's value at the given index, if it exists and can be
+	 * casted to T. Otherwise returns defaultValue.
+	 * Example:
+	 * ---
+	 * auto compound = new Compound(new Named!String("test", "value"));
+	 * assert(compound.getValue!String("test", "") == "value");
+	 * assert(compound.getValue!Int("test", 0) == 0);
+	 * assert(compound.getValue!String("miss", "miss") == "miss");
+	 * ---
+	 */
+	public pure @safe typeof(T.value) getValue(T:Tag)(string name, lazy typeof(T.value) defaultValue) if(__traits(hasMember, T, "value")) {
+		T ret = null;
+		immutable index = this.search(name);
+		if(index >= 0) {
+			static if(is(T : IList) && !is(T == List)) {
+				// special cast
+				ret = cast(T)cast(List)this.value[index];
+			} else {
+				ret = cast(T)this.value[index];
+			}
+		}
+		if(ret !is null) return ret.value;
+		else return defaultValue;
 	}
 	
 	/**
@@ -1088,6 +1114,10 @@ unittest {
 	assert(compound.get!Int("int", null) == 44);
 	assert(compound.get!Long("miss", new Long(44)) == new Long(44));
 	assert(compound.get!Short("miss", short(12)) == new Short(12));
+	assert(compound.getValue!String("0", "") == "string");
+	assert(compound.getValue!Int("int", 0) == 44);
+	assert(compound.getValue!Short("int", short(12)) == 12);
+	assert(compound.getValue!Long("miss", 100) == 100);
 
 	Tag tag = new Compound(new Named!String("a", "b"));
 	assert(tag == cast(Tag)new Compound(new Named!String("a", "b")));
