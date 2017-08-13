@@ -115,7 +115,7 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 
 }
 
-alias MinecraftLevelFormat = Format!(Compound, ClassicStream!(Endian.bigEndian), Compression.gzip);
+alias JavaLevelFormat = Format!(Compound, ClassicStream!(Endian.bigEndian), Compression.gzip);
 
 class PocketLevelFormat : Format!(Compound, ClassicStream!(Endian.littleEndian), Compression.none) {
 
@@ -147,15 +147,15 @@ class PocketLevelFormat : Format!(Compound, ClassicStream!(Endian.littleEndian),
 
 unittest {
 
-	auto minecraft = new MinecraftLevelFormat("test/minecraft.dat");
-	minecraft.load();
-	auto data = minecraft.get!Compound("Data", null);
+	auto java = new JavaLevelFormat("test/java.dat");
+	java.load();
+	auto data = java.get!Compound("Data", null);
 	assert(data !is null);
 	assert(data.has!String("LevelName") && data.get!String("LevelName", null) == "New World");
 	assert(data.has!Int("version") && data.get!Int("version", null) == 19133);
 
-	minecraft = new MinecraftLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
-	minecraft.save();
+	java = new JavaLevelFormat(new Compound(new Named!Int("Test", 42)), "test.dat");
+	java.save();
 	auto u = new UnCompress(HeaderFormat.gzip);
 	auto b = cast(ubyte[])u.uncompress(std.file.read("test.dat"));
 	b ~= cast(ubyte[])u.flush();
