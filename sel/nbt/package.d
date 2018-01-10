@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2017
+ * Copyright (c) 2017-2018 SEL
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -16,4 +16,4 @@ module sel.nbt;
 
 public import sel.nbt.json : toJSON, toNBT;
 public import sel.nbt.stream : Stream, ClassicStream, NetworkStream;
-public import sel.nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, String, ByteArray, IntArray, List, ListOf, Compound;
+public import sel.nbt.tags : Tags, Tag, Named, Byte, Bool, Short, Int, Long, Float, Double, String, ByteArray, IntArray, LongArray, List, ListOf, Compound;

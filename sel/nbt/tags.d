@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2017
+ * Copyright (c) 2017-2018 SEL
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -40,11 +40,12 @@ enum NBT_TYPE : ubyte {
 	STRING = 8,
 	LIST = 9,
 	COMPOUND = 10,
-	INT_ARRAY = 11
+	INT_ARRAY = 11,
+	LONG_ARRAY = 12,
 	
 }
 
-alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, String, List, Compound, IntArray);
+alias Tags = TypeTuple!(null, Byte, Short, Int, Long, Float, Double, ByteArray, String, List, Compound, IntArray, LongArray);
 
 private string format(string str) {
 	import std.string : replace;
@@ -523,6 +524,12 @@ alias ByteArray = NumericArrayTag!(byte, NBT_TYPE.BYTE_ARRAY);
  */
 alias IntArray = NumericArrayTag!(int, NBT_TYPE.INT_ARRAY);
 
+/**
+ * Array of signed longs, introduced in Minecraft: Java Edition 1.13
+ * and not yet in the other versions of Minecraft.
+ */
+alias LongArray = NumericArrayTag!(long, NBT_TYPE.LONG_ARRAY);
+
 unittest {
 
 	assert(new IntArray(1) == new IntArray(1));
@@ -530,6 +537,7 @@ unittest {
 	assert(new ByteArray([4]).length == 1);
 	assert(new IntArray(0, 1)[1] == 1);
 	assert(new IntArray(1, 1) == 1);
+	assert(new LongArray(long.max, 0, -1) == [long.max, 0, -1]);
 
 	assert(new ByteArray(1, 2, 3).toString() == "[1,2,3]");
 
@@ -565,6 +573,10 @@ unittest {
 	auto ia = new IntArray();
 	ia.decode(stream);
 	assert(ia == [1, 200, -2], ia.toString());
+
+	stream = new ClassicStream!(Endian.bigEndian);
+	new LongArray(1, long.min).encode(stream);
+	assert(stream.buffer == [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 128, 0, 0, 0, 0, 0, 0, 0]);
 
 }
 
