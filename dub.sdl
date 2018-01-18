@@ -5,5 +5,3 @@ license "LGPL-3.0"
 targetType "library"
 importPaths "."
 sourcePaths "."
-
-dflags "-op"
