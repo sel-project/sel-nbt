@@ -11,6 +11,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU Lesser General Public License for more details.
  * 
+ *//**
+ * Copyright: 2017-2018 sel-project
+ * License: LGPL-3.0
+ * Authors: Kripth
+ * Source: $(HTTP github.com/sel-project/sel-nbt/sel/nbt/parser.d, sel/nbt/parser.d)
  */
 module sel.nbt.parser;
 
