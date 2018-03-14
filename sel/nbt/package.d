@@ -13,8 +13,8 @@
  * 
  */
 /**
- * Copyright: 2017-2018 sel-project
- * License: LGPL-3.0
+ * Copyright: Copyright (c) sel-project
+ * License: MIT
  * Authors: Kripth
  * Source: $(HTTP github.com/sel-project/sel-nbt/sel/nbt/package.d, sel/nbt/package.d)
  */
