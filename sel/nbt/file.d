@@ -1,16 +1,24 @@
 ﻿/*
- * Copyright (c) 2017-2018 SEL
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU Lesser General Public License for more details.
- * 
+ * Copyright (c) 2017-2018 sel-project
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
  */
 /**
  * Copyright: Copyright (c) sel-project
@@ -20,9 +28,7 @@
  */
 module sel.nbt.file;
 
-// test
-import std.conv;
-import std.stdio : writeln;
+import std.conv : to;
 
 static import std.bitmanip;
 static import std.file;
@@ -30,6 +36,8 @@ import std.system : Endian;
 import std.traits : isAbstractClass;
 import std.typetuple : TypeTuple;
 import std.zlib;
+
+import xbuffer.buffer : Buffer;
 
 import sel.nbt.stream;
 import sel.nbt.tags;
@@ -56,7 +64,7 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 	private static S stream;
 
 	public static this() {
-		stream = new S();
+		stream = new S(new Buffer(1024));
 	}
 
 	public string location;
@@ -73,17 +81,17 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 	
 	public T load() {
 		
-		ubyte[] data = cast(ubyte[])std.file.read(this.location);
+		stream.buffer.data = std.file.read(this.location);
 
-		this.loadHeader(data);
+		this.loadHeader(stream.buffer);
 		
 		static if(c != Compression.none) {
 			UnCompress uc = new UnCompress(cast(HeaderFormat)c);
-			data = cast(ubyte[])uc.uncompress(data);
-			data ~= cast(ubyte[])uc.flush();
+			void[] data = stream.buffer.data!void.dup;
+			stream.buffer.reset();
+			stream.buffer.write(uc.uncompress(data));
+			stream.buffer.write(uc.flush());
 		}
-		
-		stream.buffer = data;
 
 		//TODO nameless tag
 		this.tag = cast(T)stream.readTag();
@@ -92,30 +100,29 @@ class Format(T : Tag, S : Stream, Compression c, int level=6) if(!isAbstractClas
 		
 	}
 
-	protected void loadHeader(ref ubyte[] data) {}
+	protected void loadHeader(Buffer buffer) {}
 
 	public T save() {
 
-		stream.buffer.length = 0;
+		stream.buffer.reset();
 		//TODO nameless tag
 		stream.writeTag(this.tag);
-		ubyte[] data = stream.buffer;
 
 		static if(c != Compression.none) {
 			Compress compress = new Compress(level, cast(HeaderFormat)c);
-			data = cast(ubyte[])compress.compress(data);
-			data ~= cast(ubyte[])compress.flush();
+			stream.buffer.data = compress.compress(stream.buffer.data!void);
+			stream.buffer.write(compress.flush());
 		}
 
-		this.saveHeader(data);
+		this.saveHeader(stream.buffer);
 
-		std.file.write(this.location, data);
+		std.file.write(this.location, stream.buffer.data!void);
 
 		return this.tag;
 
 	}
 
-	protected void saveHeader(ref ubyte[] data) {}
+	protected void saveHeader(Buffer buffer) {}
 
 	alias tag this;
 
@@ -135,16 +142,17 @@ class PocketLevelFormat : Format!(Compound, ClassicStream!(Endian.littleEndian),
 		super(tag, location);
 	}
 
-	protected override void loadHeader(ref ubyte[] data) {
-		if(data.length >= 8) {
-			this.v = std.bitmanip.read!(uint, Endian.littleEndian)(data);
-			size_t size = std.bitmanip.read!(uint, Endian.littleEndian)(data);
-			assert(data.length == size);
-		}
+	protected override void loadHeader(Buffer buffer) {
+		this.v = buffer.read!(Endian.littleEndian, uint)();
+		buffer.read!(Endian.littleEndian, uint)(); // size
 	}
 
-	protected override void saveHeader(ref ubyte[] data) {
-		data = std.bitmanip.nativeToLittleEndian(this.v).dup ~ std.bitmanip.nativeToLittleEndian(cast(uint)data.length).dup ~ data;
+	protected override void saveHeader(Buffer buffer) {
+		void[] data = buffer.data!void.dup;
+		buffer.reset();
+		buffer.write!(Endian.littleEndian)(this.v);
+		buffer.write!(Endian.littleEndian)(data.length.to!uint);
+		buffer.write(data);
 	}
 
 	alias tag this;
