@@ -28,7 +28,6 @@
  */
 module sel.nbt.stream;
 
-import std.conv : to;
 import std.string : capitalize;
 import std.system : Endian;
 
@@ -216,7 +215,7 @@ class NetworkStream(Endian endianness) : ClassicStream!(endianness) {
 	}
 	
 	public override void writeLength(size_t value) {
-		this.buffer.writeVar(value.to!uint);
+		this.buffer.writeVar(value & uint.max);
 	}
 	
 	public override int readInt() {
