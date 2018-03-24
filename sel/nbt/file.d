@@ -21,7 +21,7 @@
  *
  */
 /**
- * Copyright: Copyright (c) sel-project
+ * Copyright: Copyright (c) 2017-2018 sel-project
  * License: MIT
  * Authors: Kripth
  * Source: $(HTTP github.com/sel-project/sel-nbt/sel/nbt/file.d, sel/nbt/file.d)
