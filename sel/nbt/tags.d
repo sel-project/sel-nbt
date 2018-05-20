@@ -153,7 +153,7 @@ template Named(T:Tag) {
 
 	class Named : T {
 
-		public this(E...)(string name, E args) {
+		public this(E...)(string name, E args) @safe {
 			super(args);
 			this._named = true;
 			this._name = name;
@@ -176,7 +176,7 @@ class SimpleTag(T, NBT_TYPE _type) : Tag {
 	
 	public T value;
 
-	public this(T value=T.init) {
+	public this(T value=T.init) @safe {
 		this.value = value;
 	}
 
@@ -376,9 +376,9 @@ class ArrayTag(T, NBT_TYPE _type) : Tag {
 
 	public T[] value;
 
-	public this(T[] value...) {
+	public this(T[] value...) @safe {
 		if(value !is null) {
-			this.value = value;
+			this.value = value.dup;
 		}
 	}
 
