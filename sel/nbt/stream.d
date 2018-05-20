@@ -56,7 +56,8 @@ class Stream {
 	}
 
 	public @property ubyte[] data(ubyte[] data) pure nothrow @trusted @nogc {
-		return this.buffer.data = data;
+		this.buffer.data = data;
+		return this.data;
 	}
 	
 	public void writeNamelessTag(Tag tag) pure nothrow @safe @nogc {
