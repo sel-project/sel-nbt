@@ -35,6 +35,9 @@ import sel.nbt.tags : Tags, Tag, Named;
 
 import xbuffer.buffer : Buffer;
 
+/**
+ * Abstract stream of data to read and write tags.
+ */
 class Stream {
 	
 	public Buffer buffer;
@@ -50,21 +53,33 @@ class Stream {
 	public this() pure nothrow @safe {
 		this(new Buffer(512));
 	}
-	
+
+	/**
+	 * Gets the stream's data as an array of bytes.
+	 */
 	public @property ubyte[] data() pure nothrow @trusted @nogc {
 		return this.buffer.data!ubyte();
 	}
 
+	/**
+	 * Sets the stream's data.
+	 */
 	public @property ubyte[] data(ubyte[] data) pure nothrow @trusted @nogc {
 		this.buffer.data = data;
 		return this.data;
 	}
-	
+
+	/**
+	 * Writes a tag without a name (id and body only).
+	 */
 	public void writeNamelessTag(Tag tag) pure nothrow @safe @nogc {
 		this.writeByte(tag.type);
 		tag.encode(this);
 	}
-	
+
+	/**
+	 * Writes a full tag (id, name and body).
+	 */
 	public void writeTag(Tag tag) pure nothrow @safe @nogc {
 		this.writeByte(tag.type);
 		this.writeString(tag.name);
@@ -86,7 +101,10 @@ class Stream {
 	public abstract void writeString(string value) pure nothrow @safe @nogc;
 	
 	public abstract void writeLength(size_t value) pure nothrow @safe @nogc;
-	
+
+	/**
+	 * Reads a tag without a name (id and body only).
+	 */
 	public Tag readNamelessTag() pure @safe {
 		switch(this.readByte()) {
 			foreach(i, T; Tags) {
@@ -97,7 +115,10 @@ class Stream {
 			default: return null;
 		}
 	}
-	
+
+	/**
+	 * Reads a full tag (id, name and body).
+	 */
 	public Tag readTag() pure @safe {
 		switch(this.readByte()) {
 			foreach(i, T; Tags) {
@@ -132,6 +153,12 @@ class Stream {
 	
 }
 
+/**
+ * Classic stream implementation where every number is read as
+ * either big or little endian.
+ * String's length is an unsigned short and other array's lengths
+ * are unigned integers.
+ */
 class ClassicStream(Endian endianness) : Stream {
 	
 	public this(Buffer buffer) pure nothrow @safe @nogc {
@@ -193,6 +220,12 @@ class ClassicStream(Endian endianness) : Stream {
 	
 }
 
+/**
+ * Network stream used by Minecraft (Bedrock Engine) in the
+ * network.
+ * Integers are encoded as google's varints and lengths are
+ * encoded as unsigned varints.
+ */
 class NetworkStream(Endian endianness) : ClassicStream!(endianness) {
 	
 	public this(Buffer buffer) pure nothrow @safe @nogc {
