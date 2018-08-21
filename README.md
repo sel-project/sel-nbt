@@ -11,14 +11,14 @@ More on NBT can be found on [Minecraft Wiki](https://minecraft.gamepedia.com/NBT
 
 Usage
 -----
-Jump to: [Tags](#Tags), [Encoding and Decoding](#Encoding_and_Decoding), [JSON Conversion](#JSON_Conversion)
+Jump to: [Tags](#tags), [Encoding and Decoding](#encoding-and-decoding), [JSON Conversion](#json-conversion)
 
 ### Tags
 
 All 12 tags are provided in the module `sel.nbt.tags` and publicly imported in the module `sel.nbt`.
 Every tag is a class that extends the class `Tag` and may contain extra methods for working with the type, as documented below.
 
-Jump to: [Tag](#Tag), [Named](#Named), [Simple Tags](#Simple_Tags), [Array tags](#Array_Tags), [List](#List), [Compound](#Compound)
+Jump to: [Tag](#tag), [Named](#named), [Simple Tags](#simple-tags), [Array tags](#array-tags), [List](#list), [Compound](#compound)
 
 #### Tag
 `Tag` is the base abstract class for every tag and provides the basic properties and methods:
@@ -74,4 +74,21 @@ assert(a == [1, 2, 3, 4, 5]);
 
 ### Encoding and Decoding
 
+Every tag can be encoded and decoded (serialised and deserialised) using the one of the derivate of the `Stream` abstract class, located in module `sel.nbt.stream` and publicly imported in `sel.nbt`.
+
+The sub-classes of `Stream` are `ClassicStream(Endian)`, where numbers are encoded as either big-endian or little-endian, and `NetworkStream(Endian)`, where some numbers such as lengths and integers are encoded as google varint.
+big-endian `ClassicStream` is usually used by the Java Edition of Minecraft to both save world data and send data through the netowrk, while little-endian `ClassicStream` is used by Minecraft (Bedrock Engine) to save world data and little-endian `NetworkStream` to send data through the network.
+
+The methods provided by the `Stream` to read and write tags are `writeTag`, `writeNamelessTag`, `readTag` and `readNamelessTag`.
+
+Example:
+```d
+Stream stream = new ClassicStream!(Endian.bigEndian)();
+stream.writeTag(new Byte(12));
+assert(stream.data == [1, 0, 0, 12]);
+```
+
 ### JSON Conversion
+
+Every tag can be converted to JSON and every JSON value can be converted to a NBT tag.
+The provided `toJSON` and `toNBT` functions are located in the module `sel.nbt.json` and publicly imported in `sel.nbt` module.
