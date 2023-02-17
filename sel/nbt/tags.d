@@ -677,7 +677,7 @@ class List : ListImpl!Tag {
 
 	private static immutable Tag function() pure nothrow @safe[ubyte] constructors;
 
-	public static this() @safe {
+	public shared static this() @safe {
 		foreach(i, T; Tags) {
 			static if(is(T : Tag)) {
 				constructors[i] = () pure nothrow @safe { return new T(); };
@@ -763,7 +763,7 @@ class ListOf(T:Tag) : ListImpl!T if(!isAbstractClass!T) {
 
 	public static immutable ubyte tagType;
 
-	public static this() {
+	public shared static this() {
 		tagType = new T().type;
 	}
 	
