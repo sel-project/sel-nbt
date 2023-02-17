@@ -52,7 +52,7 @@ unittest {
 	
 	assert(toJSON(new Int(12)) == JSONValue(12));
 	assert(toJSON(new ListOf!Int(9, 10)) == JSONValue([9, 10]));
-	assert(toJSON(null).type == JSON_TYPE.NULL);
+	assert(toJSON(null).type == JSONType.null_);
 	
 }
 
@@ -68,33 +68,33 @@ unittest {
  */
 Tag toNBT(JSONValue json) {
 	final switch(json.type) {
-		case JSON_TYPE.OBJECT:
+		case JSONType.object:
 			Tag[] nt;
 			foreach(name, value; json.object) {
 				auto tag = toNBT(value);
 				if(tag !is null) nt ~= tag.rename(name);
 			}
 			return new Compound(nt);
-		case JSON_TYPE.ARRAY:
+		case JSONType.array:
 			Tag[] t;
 			foreach(value ; json.array) {
 				auto tag = toNBT(value);
 				if(tag !is null) t ~= tag;
 			}
 			return new List(t);
-		case JSON_TYPE.STRING:
+		case JSONType.string:
 			return new String(json.str);
-		case JSON_TYPE.INTEGER:
+		case JSONType.integer:
 			return new Long(json.integer);
-		case JSON_TYPE.UINTEGER:
+		case JSONType.uinteger:
 			return new Long(json.uinteger & long.max);
-		case JSON_TYPE.FLOAT:
+		case JSONType.float_:
 			return new Double(json.floating);
-		case JSON_TYPE.TRUE:
+		case JSONType.true_:
 			return new Bool(true);
-		case JSON_TYPE.FALSE:
+		case JSONType.false_:
 			return new Bool(false);
-		case JSON_TYPE.NULL:
+		case JSONType.null_:
 			return null;
 	}
 }
